@@ -99,6 +99,8 @@ Never reference EF Core, ASP.NET or Infrastructure types from Domain or Applicat
 - Outbound calls use Polly (timeout, retry with jitter, circuit breaker per channel).
 
 ## Testing
+- Framework: **xUnit** for all test projects (`[Fact]`/`[Theory]`; shared setup via `IClassFixture`/`ICollectionFixture`,
+  e.g. Testcontainers fixtures). Tag integration tests with `[Trait("Category", "Integration")]`.
 - Domain: every allowed AND forbidden transition per role, SLA calculations, app status rules. Pure unit tests.
 - Application: handlers with NSubstitute fakes; validators with FluentValidation's `TestValidate`.
 - Integration: `WebApplicationFactory` + Testcontainers (SQL Server, Redis). Cover auth policies, 409 on stale
