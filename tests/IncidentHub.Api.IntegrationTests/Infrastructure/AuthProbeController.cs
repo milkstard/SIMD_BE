@@ -1,5 +1,6 @@
 using IncidentHub.Api.Auth;
 using IncidentHub.Api.Hubs;
+using IncidentHub.Application.Abstractions;
 using IncidentHub.Application.Incidents.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -13,13 +14,22 @@ namespace IncidentHub.Api.IntegrationTests.Infrastructure;
 [Route("probe")]
 public sealed class AuthProbeController(
     IAuthorizationService authorization,
+    ICurrentUser currentUser,
     IHubContext<IncidentsHub, IIncidentClient> hub) : ControllerBase
 {
     public sealed record CommentRequest(string Body, bool IsInternal);
 
+    public sealed record MeResponse(string EntraObjectId, string[] Roles);
+
     /// <summary>No attribute: only the fallback policy applies.</summary>
     [HttpGet("fallback")]
     public IActionResult Fallback() => Ok();
+
+    /// <summary>Echoes what <see cref="ICurrentUser"/> derived from the validated token.</summary>
+    [HttpGet("me")]
+    public IActionResult Me() => Ok(new MeResponse(
+        currentUser.EntraObjectId,
+        currentUser.Roles.Select(r => r.ToString()).Order().ToArray()));
 
     [HttpGet("anonymous")]
     [AllowAnonymous]

@@ -207,6 +207,7 @@ must never reference `IncidentHub.Api`). Use xUnit `FakeLogger<T>` to assert war
 requests with an `X-Test-Oid` header to `TestAuthHandler` (sets `oid`, `groups`, `scp`) and everything else to the real JWT bearer handler;
 test-only `AuthProbeController` exposes one endpoint per policy and a comment broadcast endpoint)
 - 401 without token; 403 for authenticated user with no mapped role; 403 for wrong role per policy (table in §6).
+- `ICurrentUser.Roles` equals the token's groups for each of the 4 roles (and the union for several groups), via the probe `GET /probe/me`.
 - Team check: member vs non-member on write (403) and read (404).
 - Reporter never receives internal comments via REST **and** SignalR; Responder does.
 - SignalR: unauthenticated connection rejected; `access_token` query accepted on `/hubs/*` only; users join the right groups.

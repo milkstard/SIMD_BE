@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using FluentAssertions;
 using IncidentHub.Api.IntegrationTests.Infrastructure;
 using IncidentHub.Domain.Users;
@@ -33,6 +34,40 @@ public sealed class JwtValidationTests(ApiFactory factory)
         var client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
+    }
+
+    [Theory]
+    [InlineData(UserRole.Reporter)]
+    [InlineData(UserRole.Responder)]
+    [InlineData(UserRole.TeamLead)]
+    [InlineData(UserRole.Admin)]
+    public async Task GetMe_TokenInRoleGroup_CurrentUserRolesMatchTheGroup(UserRole role)
+    {
+        var objectId = Guid.NewGuid().ToString();
+        var token = factory.Jwt.Create(factory.TenantId, Audience, objectId, [factory.GroupFor(role)], "access_as_user");
+
+        var response = await ClientWithBearer(token).GetAsync("/probe/me");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var me = await response.Content.ReadFromJsonAsync<AuthProbeController.MeResponse>();
+        me!.Roles.Should().Equal(role.ToString());
+        me.EntraObjectId.Should().Be(objectId);
+    }
+
+    [Fact]
+    public async Task GetMe_TokenInSeveralGroups_CurrentUserRolesAreTheUnion()
+    {
+        var token = factory.Jwt.Create(
+            factory.TenantId,
+            Audience,
+            Guid.NewGuid().ToString(),
+            [factory.GroupFor(UserRole.Reporter), factory.GroupFor(UserRole.TeamLead)],
+            "access_as_user");
+
+        var response = await ClientWithBearer(token).GetAsync("/probe/me");
+
+        var me = await response.Content.ReadFromJsonAsync<AuthProbeController.MeResponse>();
+        me!.Roles.Should().Equal(nameof(UserRole.Reporter), nameof(UserRole.TeamLead));
     }
 
     [Fact]
