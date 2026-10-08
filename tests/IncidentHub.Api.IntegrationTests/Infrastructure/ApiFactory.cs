@@ -135,6 +135,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Returns the internal user id for an Entra object id, creating the user when needed.</summary>
+    public async Task<Guid> EnsureUserAsync(string objectId)
+    {
+        using var scope = Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IUserDirectory>()
+            .EnsureUserAsync(objectId, "Test User", $"{objectId}@test.local", CancellationToken.None);
+    }
+
     /// <summary>Connection string for a fresh, empty database on the shared SQL container.</summary>
     public string NewDatabaseConnectionString()
     {

@@ -16,6 +16,7 @@ public static class Policies
     public const string CanCommentInternally = nameof(CanCommentInternally);
     public const string CanManageApplications = nameof(CanManageApplications);
     public const string CanManageTeams = nameof(CanManageTeams);
+    public const string CanCreateApplications = nameof(CanCreateApplications);
     public const string CanViewDashboard = nameof(CanViewDashboard);
 
     private static readonly string[] AnyRole = Enum.GetNames<UserRole>();
@@ -39,6 +40,7 @@ public static class Policies
             .AddPolicy(CanCommentInternally, p => Base(p).RequireRole(ResponderRoles))
             .AddPolicy(CanManageApplications, p => Base(p).RequireRole(LeadRoles))
             .AddPolicy(CanManageTeams, p => Base(p).RequireRole(AdminOnly))
+            .AddPolicy(CanCreateApplications, p => Base(p).RequireRole(AdminOnly))
             .AddPolicy(CanViewDashboard, p => Base(p).RequireRole(AnyRole));
 
         services.AddScoped<IAuthorizationHandler, AppTeamAuthorizationHandler>();

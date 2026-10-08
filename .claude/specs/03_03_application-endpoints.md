@@ -1,6 +1,6 @@
 # Spec 03_03: Application catalog endpoints
 
-> Status: **Draft** · Source: BE-03 in docs/BACKEND-SPECS.md · Part 03 of 03
+> Status: **Implemented** (integration tests written; they need Docker to run) · Source: BE-03 in docs/BACKEND-SPECS.md · Part 03 of 03
 
 ## 1. Purpose & scope
 
@@ -81,7 +81,12 @@ Api.IntegrationTests (`[Trait("Category","Integration")]`, `Apps/ApplicationsEnd
 
 Deleting applications; `AppStatus`/dashboard data (BE-11); SLA policy and escalation behaviour (BE-12); team membership management; SignalR group changes when an app's owning team changes (document in BE-09).
 
-## 8. Open questions
+## 8. Open questions — resolved
+
+Decided: 1 `POST` Admin only (new policy `CanCreateApplications`); `PUT` Admin or a TeamLead who belongs to the owning team (existing `AppTeamRequirement.MemberOrAdmin`); 2 all roles may `GET`, team-filtered, Admin sees all; 3 request field `escalationContactId`, response `escalationContact`; 4 inactive hidden by default, `includeInactive=true` for Admin only, `GET /{id}` still returns them when visible; 5 `Paged<T>`; 6 API-CONTRACT enum; 7 route and DTO names use `Application`, class stays `MonitoredApp`; 8 `owningTeamId` may change on `PUT`, but only by Admin (a TeamLead gets 403).
+
+Original questions:
+
 
 1. **Write authorization conflict**: BACKEND-SPECS (AC) says `POST /applications` requires **Admin**; entra-id spec §6 says `CanManageApplications` = TeamLead (own app only) + Admin, and applies to "application + team + SLA policy endpoints". Proposal: `POST` Admin only; `PUT` Admin, plus TeamLead only for apps owned by a team they lead (`TeamMembers.Role = TeamLead`).
 2. **Read visibility**: API-CONTRACT groups `/applications` under "Admin (Admin role)" but the frontend needs the app list to report an incident (any role, restricted to the user's teams per entra-id D6/§6). Confirm: all roles may `GET`, filtered by team membership, Admin sees all.

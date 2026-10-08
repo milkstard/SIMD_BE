@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using IncidentHub.Api.Auth;
 using IncidentHub.Api.Errors;
 using IncidentHub.Api.Filters;
@@ -22,7 +23,9 @@ builder.Services.AddControllers(options =>
 
     // A missing required string should reach FluentValidation (422 with field errors) instead of the automatic 400.
     options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
-});
+})
+.AddJsonOptions(options =>
+    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddIncidentHubSwagger(builder.Configuration);
 
 builder.Services.AddSignalR().AddStackExchangeRedis(options =>

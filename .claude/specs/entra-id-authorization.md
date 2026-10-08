@@ -93,7 +93,9 @@ Fallback policy = **require authenticated user** (everything is protected unless
 | `CanTransitionIncident` | Reporter, Responder, TeamLead, Admin | Member of app team; **fine-grained role per transition is enforced by `Incident.TransitionTo`** (Assignee/Reporter/Responder rules) | `POST /incidents/{n}/transitions` |
 | `CanAssignIncident` | Responder, TeamLead, Admin | Member | assign endpoint |
 | `CanCommentInternally` | Responder, TeamLead, Admin | Member | create/read internal comments |
-| `CanManageApplications` | TeamLead, Admin | TeamLead: own app only; Admin: any | application + team + SLA policy endpoints |
+| `CanManageApplications` | TeamLead, Admin | TeamLead: own app only; Admin: any | `PUT /applications/{id}` and SLA policy endpoints (a TeamLead cannot change `owningTeamId`) |
+| `CanCreateApplications` | Admin | n/a | `POST /applications` (03_03) |
+| `CanManageTeams` | Admin | n/a | `/teams` endpoints (03_02) |
 | `CanViewDashboard` | any authenticated role | Results filtered to apps the user belongs to (Admin: all) | `/dashboard/*` |
 
 Policies are applied with `[Authorize(Policy = Policies.X)]` on the action and check **scope + role only**. A policy that carries

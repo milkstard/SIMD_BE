@@ -37,6 +37,15 @@ public sealed class ProblemDetailsMiddleware(
                 Title = "Validation failed",
             });
         }
+        catch (ForbiddenException exception) when (!context.Response.HasStarted)
+        {
+            await WriteAsync(context, new ProblemDetails
+            {
+                Status = StatusCodes.Status403Forbidden,
+                Title = "Forbidden",
+                Detail = exception.Message,
+            });
+        }
         catch (NotFoundException exception) when (!context.Response.HasStarted)
         {
             await WriteAsync(context, new ProblemDetails

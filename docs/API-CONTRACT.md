@@ -327,6 +327,17 @@ interface Application {
   id: string; name: string; code: string;
   owningTeam: TeamRef; escalationContact: UserRef | null;
   environments: Environment[]; isActive: boolean;
+  rowVersion: string;
+}
+interface CreateApplicationRequest {
+  name: string; code: string;                 // code: 2-20 chars [A-Za-z0-9_-], stored upper-case, unique
+  owningTeamId: string; escalationContactId?: string | null;
+  environments: Environment[];                // non-empty, distinct
+  isActive?: boolean;                         // default true
+}
+interface UpdateApplicationRequest {          // PUT = full replace, If-Match required
+  name: string; code: string; owningTeamId: string; escalationContactId?: string | null;
+  environments: Environment[]; isActive: boolean;
 }
 interface Team {
   id: string; name: string; email: string;
@@ -343,8 +354,8 @@ interface SlaPolicy {
 
 | Method | Path |
 |---|---|
-| GET / POST | `/applications` |
-| GET / PUT | `/applications/{id}` |
+| GET / POST | `/applications` (see below) |
+| GET / PUT | `/applications/{id}` (see below) |
 | GET / POST | `/teams` (see below) |
 | GET / PUT | `/teams/{id}` (see below) |
 | GET / PUT | `/sla-policies`, `/sla-policies/{id}` |
@@ -360,6 +371,15 @@ Teams (all verbs are **Admin only**):
 
 Validation failures return `422` with camelCase keys, e.g. `{ "email": ["..."], "teamsChannelUrl": ["..."] }`.
 Team names are not unique.
+
+Applications (`rowVersion` is also returned as the `ETag` header):
+
+| Method | Path | Who | Success | Notes |
+|---|---|---|---|---|
+| GET | `/applications?cursor=&limit=25&includeInactive=false` | any role | `200` `Paged<Application>` | Admin sees all; others only applications owned by a team they belong to. Ordered by `name`. Inactive hidden unless `includeInactive=true` (Admin only; ignored for other roles) |
+| POST | `/applications` | Admin | `201` `Application`, `Location`, `ETag` | `Idempotency-Key` honoured; `409` duplicate `code` (case-insensitive); `422` unknown `owningTeamId` / `escalationContactId` |
+| GET | `/applications/{id}` | any role | `200` `Application` + `ETag` | `404` if missing **or not visible**; inactive applications are still readable |
+| PUT | `/applications/{id}` | Admin, or TeamLead of the owning team | `200` `Application` + `ETag` | `If-Match` required (`428` missing, `400` malformed, `409` stale); `403` for a non-member TeamLead; only Admin may change `owningTeamId` |
 
 ### Integration (phase 2)
 
