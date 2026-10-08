@@ -27,7 +27,7 @@ OutboxMessage (standalone, written in the same transaction as the triggering cha
 ## Tables
 
 ### `Applications`
-The services/apps that incidents are reported against.
+The services/apps that incidents are reported against. (C# entity: `MonitoredApp`, to avoid colliding with the `IncidentHub.Application` namespace.)
 
 | Column | Type | Notes |
 |---|---|---|
@@ -36,7 +36,7 @@ The services/apps that incidents are reported against.
 | `Code` | `nvarchar(20)` | not null, unique — short slug used in URLs/filters |
 | `OwningTeamId` | `uniqueidentifier` | FK → `Teams.Id`, not null |
 | `EscalationUserId` | `uniqueidentifier` | FK → `Users.Id`, nullable |
-| `Environments` | `nvarchar(max)` | JSON array, e.g. `["Production","Staging"]` |
+| `Environments` | `nvarchar(max)` | JSON array, e.g. `["Production","UAT"]` |
 | `IsActive` | `bit` | not null, default `1` |
 | `RowVersion` | `rowversion` | concurrency token |
 
@@ -76,12 +76,13 @@ Local projection of Entra ID identities — never the source of truth for auth, 
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | `uniqueidentifier` | PK |
-| `ExternalId` | `nvarchar(100)` | not null, unique — Entra Object ID |
+| `EntraObjectId` | `nvarchar(64)` | not null, unique — Entra Object ID |
 | `DisplayName` | `nvarchar(200)` | not null |
 | `Email` | `nvarchar(320)` | not null |
-| `NotificationPrefs` | `nvarchar(max)` | JSON, e.g. `{"channel":"Email"}` |
+| `NotificationPrefs` | `nvarchar(max)` | not null, JSON, default `{"channel":"Email"}` |
+| `LastSeenAt` | `datetimeoffset` | not null — updated on each sign-in |
 
-**Indexes:** unique on `ExternalId`.
+**Indexes:** unique on `EntraObjectId`.
 
 ---
 

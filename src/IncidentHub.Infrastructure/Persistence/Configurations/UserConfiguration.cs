@@ -13,6 +13,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.EntraObjectId).HasMaxLength(64).IsRequired();
         builder.Property(u => u.DisplayName).HasMaxLength(256).IsRequired();
         builder.Property(u => u.Email).HasMaxLength(320).IsRequired();
+        builder.Property(u => u.NotificationPrefs).HasColumnType("nvarchar(max)").HasDefaultValue(User.DefaultNotificationPrefs).IsRequired();
         builder.HasIndex(u => u.EntraObjectId).IsUnique();
     }
 }

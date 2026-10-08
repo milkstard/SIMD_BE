@@ -23,7 +23,7 @@ uses managed identity.
 | D2 | Roles come from **Entra security groups** (per CLAUDE.md), mapped to `Reporter`, `Responder`, `TeamLead`, `Admin` via configuration (group object ID → role). | Groups are how the org already administers access. |
 | D3 | Tokens carry the `groups` claim (object IDs). **Group overage** (>200 groups → `_claim_names`/`hasgroups`) is **deferred**: when detected, log a `Warning` and grant no roles (fail closed). Graph resolution is a future spec. Mitigate by assigning only the four IncidentHub groups to the enterprise app and using "groups assigned to the application" in the token config. | Overage silently drops groups; failing closed is safe and visible. |
 | D4 | Role mapping happens once per request in `IClaimsTransformation`, adding standard `ClaimTypes.Role` claims. Policies only ever look at roles, never at group IDs. | Single mapping point; policies stay readable. |
-| D5 | **Team membership** (user ↔ `MonitoredApp`) is data in SQL (`AppTeamMember`), not an Entra concept. The resource check reads it; it is cached briefly in Redis. | Teams are app-specific and change often. |
+| D5 | **Team membership** is data in SQL (`TeamMembers`, per team; a user belongs to an app's team via `Applications.OwningTeamId` — changed by spec 03_01, replacing the per-app `AppTeamMember`), not an Entra concept. The resource check reads it; it is cached briefly in Redis. | Teams are app-specific and change often. |
 | D6 | Admin is an explicit role and **not** a bypass of the team check for incident actions. Admin bypasses only for application management and the dashboard (§6). | Least privilege; auditable. |
 | D8 | **Single tenant, members only.** `tid` must equal the configured tenant; B2B guests are not supported. | Internal tool; avoids guest `oid`/email mapping. |
 | D7 | Authorization failures return RFC 7807 via `ProblemDetailsMiddleware`: 401 unauthenticated, 403 forbidden (incl. forbidden transition). | CLAUDE.md error rules. |
@@ -168,8 +168,9 @@ Write attempts on a visible incident without permission → 403.
 
 ## 11. Data model additions
 
-`Domain/Apps/AppTeamMember`: `ApplicationId`, `UserId`, `TeamRole` (Member | Lead), `AddedAt` (DateTimeOffset UTC).
-Unique index `(ApplicationId, UserId)`; index `(UserId)` for "my apps" lookups. `User`: `Id` (Guid), `EntraObjectId` (unique),
+> **Superseded by spec 03_01:** `AppTeamMember` was replaced by `Domain/Teams/TeamMember` (`TeamId`, `UserId`, `Role`; PK `(TeamId, UserId)`, index `(UserId)`).
+
+`Domain/Apps/AppTeamMember` (historical): `ApplicationId`, `UserId`, `TeamRole` (Member | Lead), `AddedAt`. `User`: `Id` (Guid), `EntraObjectId` (unique),
 `DisplayName`, `Email`, `LastSeenAt`. Config classes in `Infrastructure/Persistence/Configurations/`; migration via
 `dotnet ef migrations add AddUsersAndAppTeams …` — applied by the pipeline, never at startup. History rows store `UserId`
 as actor (`IncidentHistory` stays append-only).

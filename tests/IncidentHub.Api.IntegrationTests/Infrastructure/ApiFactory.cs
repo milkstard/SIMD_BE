@@ -1,6 +1,7 @@
 using IncidentHub.Api.Auth;
 using IncidentHub.Application.Abstractions;
 using IncidentHub.Domain.Apps;
+using IncidentHub.Domain.Teams;
 using IncidentHub.Domain.Users;
 using IncidentHub.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
@@ -107,18 +108,21 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         });
     }
 
-    /// <summary>Creates a monitored application and returns its id.</summary>
+    /// <summary>Creates a team and a monitored application owned by it; returns the application id.</summary>
     public async Task<Guid> CreateAppAsync()
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var app = MonitoredApp.Create($"app-{Guid.NewGuid():N}");
-        db.MonitoredApps.Add(app);
+        var suffix = Guid.NewGuid().ToString("N");
+        var team = Team.Create($"team-{suffix}", $"{suffix}@test.local", null);
+        var app = MonitoredApp.Create($"app-{suffix}", suffix[..12], team.Id, null, [AppEnvironment.Production]);
+        db.Teams.Add(team);
+        db.Applications.Add(app);
         await db.SaveChangesAsync();
         return app.Id;
     }
 
-    /// <summary>Makes the user (identified by Entra object id) a member of the application's team.</summary>
+    /// <summary>Makes the user (identified by Entra object id) a member of the application's owning team.</summary>
     public async Task AddToTeamAsync(string objectId, Guid applicationId)
     {
         using var scope = Services.CreateScope();
@@ -126,8 +130,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             .EnsureUserAsync(objectId, "Test User", $"{objectId}@test.local", CancellationToken.None);
 
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        db.AppTeamMembers.Add(AppTeamMember.Create(applicationId, userId, AppTeamRole.Member, DateTimeOffset.UtcNow));
+        var teamId = await db.Applications.Where(a => a.Id == applicationId).Select(a => a.OwningTeamId).SingleAsync();
+        db.TeamMembers.Add(TeamMember.Create(teamId, userId, UserRole.Responder));
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>Connection string for a fresh, empty database on the shared SQL container.</summary>
+    public string NewDatabaseConnectionString()
+    {
+        var builder = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(_sql.GetConnectionString())
+        {
+            InitialCatalog = $"catalog_{Guid.NewGuid():N}",
+        };
+        return builder.ConnectionString;
     }
 }
 

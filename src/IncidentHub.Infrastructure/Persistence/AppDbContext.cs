@@ -1,4 +1,5 @@
 using IncidentHub.Domain.Apps;
+using IncidentHub.Domain.Teams;
 using IncidentHub.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,9 +9,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 {
     public DbSet<User> Users => Set<User>();
 
-    public DbSet<MonitoredApp> MonitoredApps => Set<MonitoredApp>();
+    public DbSet<Team> Teams => Set<Team>();
 
-    public DbSet<AppTeamMember> AppTeamMembers => Set<AppTeamMember>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+
+    public DbSet<MonitoredApp> Applications => Set<MonitoredApp>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

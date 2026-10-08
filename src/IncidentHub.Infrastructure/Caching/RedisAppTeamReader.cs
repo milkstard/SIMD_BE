@@ -25,9 +25,12 @@ public sealed class RedisAppTeamReader(AppDbContext db, IConnectionMultiplexer r
         }
 
         activity?.SetTag("cache.hit", false);
-        var isMember = await db.AppTeamMembers
+        var isMember = await db.Applications
             .AsNoTracking()
-            .AnyAsync(m => m.ApplicationId == applicationId && m.UserId == userId, cancellationToken);
+            .Where(a => a.Id == applicationId)
+            .AnyAsync(
+                a => db.TeamMembers.Any(m => m.TeamId == a.OwningTeamId && m.UserId == userId),
+                cancellationToken);
 
         await cache.StringSetAsync(key, isMember, Ttl);
         return isMember;
@@ -36,10 +39,10 @@ public sealed class RedisAppTeamReader(AppDbContext db, IConnectionMultiplexer r
     public async Task<IReadOnlyList<Guid>> GetApplicationIdsForUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         using var activity = InfrastructureTelemetry.Source.StartActivity("team.apps_for_user");
-        return await db.AppTeamMembers
+        return await db.Applications
             .AsNoTracking()
-            .Where(m => m.UserId == userId)
-            .Select(m => m.ApplicationId)
+            .Where(a => db.TeamMembers.Any(m => m.TeamId == a.OwningTeamId && m.UserId == userId))
+            .Select(a => a.Id)
             .ToListAsync(cancellationToken);
     }
 

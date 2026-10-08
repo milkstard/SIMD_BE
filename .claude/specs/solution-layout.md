@@ -86,7 +86,8 @@ Common/          # Entity, AggregateRoot (domain event list), IDomainEvent, Resu
 Incidents/       # Incident (aggregate, TransitionTo), IncidentStatus, Severity, IncidentWorkflow (transition table),
                  # IncidentHistory, Comment, Attachment, ScanStatus, IncidentNumber (value object, "INC-1042")
   Events/        # IncidentReported, IncidentTransitioned, IncidentAssigned, SeverityChanged, CommentAdded, AttachmentAdded
-Apps/            # MonitoredApp, AppEnvironment (Production, …), AppStatus, AppStatusCalculator, AppTeamMember
+Apps/            # MonitoredApp, AppEnvironment (Production, UAT, Development), AppStatus, AppStatusCalculator
+Teams/           # Team, TeamMember (composite key TeamId+UserId, Role)
 Sla/             # SlaPolicy, SlaClock (computes AckDueAt / ResolveDueAt)
 Users/           # User (Entra oid ↔ internal id), UserRole (Reporter, Responder, TeamLead, Admin), Actor (who performed an action)
 Outbox/          # OutboxMessage (Id, Type, Payload, OccurredAt, ProcessedAt, Attempts)

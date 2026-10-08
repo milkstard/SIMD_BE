@@ -4,6 +4,8 @@ namespace IncidentHub.Domain.Users;
 
 public sealed class User : Entity
 {
+    public const string DefaultNotificationPrefs = "{\"channel\":\"Email\"}";
+
     private User()
     {
     }
@@ -15,6 +17,8 @@ public sealed class User : Entity
     public string Email { get; private set; } = string.Empty;
 
     public DateTimeOffset LastSeenAt { get; private set; }
+
+    public string NotificationPrefs { get; private set; } = DefaultNotificationPrefs;
 
     public static User Create(string entraObjectId, string displayName, string email, DateTimeOffset now)
     {
