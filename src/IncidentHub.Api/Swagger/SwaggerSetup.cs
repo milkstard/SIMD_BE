@@ -1,4 +1,5 @@
 using IncidentHub.Api.Auth;
+using IncidentHub.Api.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Models;
@@ -39,6 +40,7 @@ public static class SwaggerSetup
                 [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = SchemeName } }] = [scope],
             });
             options.OperationFilter<AuthResponsesOperationFilter>();
+            options.OperationFilter<RequestHeadersOperationFilter>();
         });
 
         return services;
@@ -90,5 +92,38 @@ public sealed class AuthResponsesOperationFilter : IOperationFilter
 
         operation.Responses.TryAdd("401", new OpenApiResponse { Description = "Missing or invalid access token (ProblemDetails)" });
         operation.Responses.TryAdd("403", new OpenApiResponse { Description = "Authenticated but not permitted (ProblemDetails)" });
+    }
+}
+
+/// <summary>Documents the <c>If-Match</c> (required) and <c>Idempotency-Key</c> (optional) request headers.</summary>
+public sealed class RequestHeadersOperationFilter : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        var attributes = context.MethodInfo.GetCustomAttributes(true);
+
+        if (attributes.OfType<RequireIfMatchAttribute>().Any())
+        {
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Name = "If-Match",
+                In = ParameterLocation.Header,
+                Required = true,
+                Description = "Quoted rowVersion from the last read (the ETag header).",
+                Schema = new OpenApiSchema { Type = "string" },
+            });
+        }
+
+        if (attributes.OfType<IdempotentAttribute>().Any())
+        {
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Name = "Idempotency-Key",
+                In = ParameterLocation.Header,
+                Required = false,
+                Description = "Repeating a key returns the original result instead of creating another resource.",
+                Schema = new OpenApiSchema { Type = "string", Format = "uuid" },
+            });
+        }
     }
 }

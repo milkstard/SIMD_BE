@@ -1,4 +1,5 @@
 using FluentValidation;
+using IncidentHub.Application.Behaviors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace IncidentHub.Application;
@@ -9,7 +10,11 @@ public static class DependencyInjection
     {
         var assembly = typeof(DependencyInjection).Assembly;
 
-        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(assembly));
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(assembly);
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
         services.AddValidatorsFromAssembly(assembly);
 
         return services;

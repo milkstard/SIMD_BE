@@ -1,5 +1,6 @@
 using IncidentHub.Api.Auth;
 using IncidentHub.Api.Errors;
+using IncidentHub.Api.Filters;
 using IncidentHub.Api.Hubs;
 using IncidentHub.Api.Swagger;
 using IncidentHub.Application;
@@ -15,7 +16,13 @@ builder.Services.AddIncidentHubProblemDetails();
 builder.Services.AddIncidentHubAuthentication(builder.Configuration);
 builder.Services.AddIncidentHubAuthorization();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ETagResultFilter>();
+
+    // A missing required string should reach FluentValidation (422 with field errors) instead of the automatic 400.
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+});
 builder.Services.AddIncidentHubSwagger(builder.Configuration);
 
 builder.Services.AddSignalR().AddStackExchangeRedis(options =>

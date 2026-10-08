@@ -16,6 +16,7 @@ Imported (loaded into context every session):
 - API contracts — endpoints, DTOs, enums, errors, SignalR events. Update it in the same change as any endpoint/DTO change: @docs/API-CONTRACT.md
 - Architecture decisions (ADRs) — one file per decision that changes the architecture; these override the sections below if they conflict.
   Add an `@docs/adr/<NNNN-title>.md` import line here whenever a new ADR is created (imports don't support globs or directories):
+@docs/adr/0001-ef-core-in-application.md
 
 Reference only (NOT imported — read on demand when you need the original rationale, requirements or trade-offs):
 - `docs/System Design Service Incident & Monitoring Dashboard.md`

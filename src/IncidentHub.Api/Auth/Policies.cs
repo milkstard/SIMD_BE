@@ -15,6 +15,7 @@ public static class Policies
     public const string CanAssignIncident = nameof(CanAssignIncident);
     public const string CanCommentInternally = nameof(CanCommentInternally);
     public const string CanManageApplications = nameof(CanManageApplications);
+    public const string CanManageTeams = nameof(CanManageTeams);
     public const string CanViewDashboard = nameof(CanViewDashboard);
 
     private static readonly string[] AnyRole = Enum.GetNames<UserRole>();
@@ -23,6 +24,8 @@ public static class Policies
         [nameof(UserRole.Responder), nameof(UserRole.TeamLead), nameof(UserRole.Admin)];
 
     private static readonly string[] LeadRoles = [nameof(UserRole.TeamLead), nameof(UserRole.Admin)];
+
+    private static readonly string[] AdminOnly = [nameof(UserRole.Admin)];
 
     public static IServiceCollection AddIncidentHubAuthorization(this IServiceCollection services)
     {
@@ -35,6 +38,7 @@ public static class Policies
             .AddPolicy(CanAssignIncident, p => Base(p).RequireRole(ResponderRoles))
             .AddPolicy(CanCommentInternally, p => Base(p).RequireRole(ResponderRoles))
             .AddPolicy(CanManageApplications, p => Base(p).RequireRole(LeadRoles))
+            .AddPolicy(CanManageTeams, p => Base(p).RequireRole(AdminOnly))
             .AddPolicy(CanViewDashboard, p => Base(p).RequireRole(AnyRole));
 
         services.AddScoped<IAuthorizationHandler, AppTeamAuthorizationHandler>();

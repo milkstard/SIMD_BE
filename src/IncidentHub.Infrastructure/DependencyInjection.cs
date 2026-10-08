@@ -28,7 +28,9 @@ public static class DependencyInjection
             return ConnectionMultiplexer.Connect(redisOptions);
         });
 
+        services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IAppTeamReader, RedisAppTeamReader>();
+        services.AddScoped<IIdempotencyStore, RedisIdempotencyStore>();
         services.AddScoped<IUserDirectory, UserDirectory>();
 
         return services;

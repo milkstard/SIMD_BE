@@ -328,6 +328,13 @@ interface Application {
   owningTeam: TeamRef; escalationContact: UserRef | null;
   environments: Environment[]; isActive: boolean;
 }
+interface Team {
+  id: string; name: string; email: string;
+  teamsChannelUrl: string | null;   // absolute https URL
+  rowVersion: string;               // base64; also returned as the ETag header
+}
+interface CreateTeamRequest { name: string; email: string; teamsChannelUrl?: string | null; }   // name <= 200, email <= 320, url <= 500
+interface UpdateTeamRequest { name: string; email: string; teamsChannelUrl?: string | null; }   // PUT = full replace
 interface SlaPolicy {
   id: string; severity: Severity;
   ackMinutes: number; resolveMinutes: number; escalateAtPercent: number;  // e.g. 80
@@ -338,8 +345,21 @@ interface SlaPolicy {
 |---|---|
 | GET / POST | `/applications` |
 | GET / PUT | `/applications/{id}` |
-| GET / POST | `/teams`, PUT `/teams/{id}` |
+| GET / POST | `/teams` (see below) |
+| GET / PUT | `/teams/{id}` (see below) |
 | GET / PUT | `/sla-policies`, `/sla-policies/{id}` |
+
+Teams (all verbs are **Admin only**):
+
+| Method | Path | Body | Success | Notes |
+|---|---|---|---|---|
+| GET | `/teams?cursor=&limit=25&includeTotal=false` | — | `200` `Paged<Team>` | Ordered by `name`, then `id` |
+| POST | `/teams` | `CreateTeamRequest` | `201` `Team`, `Location`, `ETag` | `Idempotency-Key` honoured |
+| GET | `/teams/{id}` | — | `200` `Team` + `ETag` | `404` if unknown |
+| PUT | `/teams/{id}` | `UpdateTeamRequest` | `200` `Team` + `ETag` | `If-Match` required; `428` if missing, `400` if malformed, `409` if stale, `404` if unknown |
+
+Validation failures return `422` with camelCase keys, e.g. `{ "email": ["..."], "teamsChannelUrl": ["..."] }`.
+Team names are not unique.
 
 ### Integration (phase 2)
 
@@ -364,12 +384,13 @@ Repeated `externalId` while an incident is open adds a comment instead of creati
 
 | Status | When | Frontend behaviour |
 |---|---|---|
-| 400 | Malformed request | Generic error toast |
+| 400 | Malformed request, including a malformed `If-Match` or `Idempotency-Key` | Generic error toast |
 | 401 | Missing/expired token | MSAL silent refresh, then retry once |
 | 403 | Role or team not allowed | Toast; hide the action |
 | 404 | Not found or not visible to user | Not-found page |
 | 409 | Stale `If-Match` or invalid transition | Roll back optimistic update, refetch, toast |
 | 413 | File too large | Field error on the dropzone |
+| 428 | Write sent without the required `If-Match` header | Client bug; send the ETag from the last read |
 | 422 | Validation failed; `errors` = `{ "title": ["Title is required."] }` | Map to form fields with `setError` |
 | 429 | Rate limited | Retry after `Retry-After` |
 | 500 | Unexpected | Toast showing `traceId` for support |

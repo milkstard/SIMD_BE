@@ -75,7 +75,7 @@ graph TD
 
 > Application defines `IAppDbContext` exposing `DbSet<T>`-like access through an abstraction. If `IQueryable`
 > projection needs EF async extensions, Application may reference only `Microsoft.EntityFrameworkCore`
-> (core, no provider) — this is the single permitted exception and must be recorded in an ADR before use.
+> (core, no provider) — this is the single permitted exception, recorded in ADR 0001 (`docs/adr/0001-ef-core-in-application.md`).
 
 ## 5. Per-project folder trees
 
