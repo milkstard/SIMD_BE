@@ -23,6 +23,10 @@ dotnet format                                         # run before committing
 ```
 After changing any endpoint or DTO, regenerate the OpenAPI spec (`swagger.json` in `/contracts`)
 — the frontend generates its TypeScript types from it and CI fails on an unexpected diff.
+Run `scripts/generate-openapi.ps1` (uses fixed placeholder config so the output is stable).
+
+Local config (user-secrets, never committed): `AzureAd:TenantId`, `AzureAd:ClientId`, `Authorization:GroupRoleMap:<group-id>` = role,
+`ConnectionStrings:Sql`, `ConnectionStrings:Redis`. The API refuses to start without the Entra settings. See `.claude/specs/entra-id-authorization.md`.
 
 ## Solution layout (Clean Architecture — respect the dependency direction)
 ```
@@ -33,7 +37,7 @@ src/
   IncidentHub.Api/             # Controllers, IncidentHub (SignalR), auth policies, ProblemDetails, DI wiring
   IncidentHub.Worker/          # OutboxDispatcher, SlaMonitor, DailyStatsJob
 tests/
-  Domain.UnitTests, Application.UnitTests, Api.IntegrationTests (Testcontainers)
+  Domain.UnitTests, Application.UnitTests, Api.UnitTests, Api.IntegrationTests (Testcontainers)
 ```
 Domain → nothing. Application → Domain. Infrastructure → Application. Api/Worker → all.
 Never reference EF Core, ASP.NET or Infrastructure types from Domain or Application.

@@ -1,6 +1,6 @@
 # Spec: Entra ID authentication & authorization
 
-> Status: **Draft — open questions resolved (§16); not implemented.** Source of truth for rules is [`CLAUDE.md`](../../CLAUDE.md) (Security rules,
+> Status: **Implemented** (see §17 for what is deferred to later features); open questions resolved (§16). Source of truth for rules is [`CLAUDE.md`](../../CLAUDE.md) (Security rules,
 > Core domain rules); file placement follows [`solution-layout.md`](solution-layout.md). If this spec and CLAUDE.md
 > disagree, CLAUDE.md wins — fix the spec.
 
@@ -34,7 +34,7 @@ uses managed identity.
 |---|---|
 | `ICurrentUser` (`UserId`, `Email`, `DisplayName`, `Roles`, `IsInRole`) and `IAppTeamReader` (`IsMemberAsync(userId, appId, ct)`) interfaces | `Application/Abstractions/` |
 | `Role` enum / `Actor` value object passed to `Incident.TransitionTo(newStatus, actor, note)` | `Domain/Users/` (no ASP.NET types) |
-| `AppTeamMember` entity + EF configuration; `AppTeamReader` (SQL + Redis cache) | `Domain/Apps/`, `Infrastructure/Persistence/Configurations/`, `Infrastructure/Caching/` |
+| `User` + `AppTeamMember` entities, `IUserDirectory` (oid → internal id) in `Application/Abstractions/`; EF configuration; `AppTeamReader` (SQL + Redis cache) | `Domain/Apps/`, `Infrastructure/Persistence/Configurations/`, `Infrastructure/Caching/` |
 | JWT setup, `Policies`, `AppTeamRequirement`, `AppTeamAuthorizationHandler`, `GroupRoleClaimsTransformation`, `CurrentUser` | `Api/Auth/` |
 
 Domain and Application never reference ASP.NET, `ClaimsPrincipal` or Microsoft.Identity types. Handlers get the actor
@@ -58,8 +58,7 @@ policy layer validates *that the caller may attempt it at all* — both must hol
 "AzureAd": {
   "Instance": "https://login.microsoftonline.com/",
   "TenantId": "<tenant-id>",
-  "ClientId": "<api-client-id>",
-  "Audience": "api://<api-client-id>"
+  "ClientId": "<api-client-id>"
 },
 "Authorization": {
   "GroupRoleMap": {
@@ -74,6 +73,11 @@ policy layer validates *that the caller may attempt it at all* — both must hol
 Secrets (`AzureAd:ClientCredentials`) → user-secrets locally, Key Vault in Azure. Bind via `IOptions` with
 `ValidateOnStart` — startup fails if `TenantId`/`ClientId` are missing or `GroupRoleMap` is empty.
 Group IDs are GUIDs, not secrets, but differ per environment (`appsettings.{Env}.json`).
+
+Other required settings (also user-secrets / Key Vault, never committed): `ConnectionStrings:Sql`, `ConnectionStrings:Redis`;
+optional `Swagger:ClientId` (the registration Swagger UI signs in with, Development only).
+The committed `appsettings.json` leaves `TenantId`/`ClientId`/`GroupRoleMap` empty on purpose so a missing config fails startup.
+Accepted audiences are Microsoft.Identity.Web's defaults: `<client-id>` and `api://<client-id>`.
 
 ## 6. Roles & policies
 
@@ -92,15 +96,18 @@ Fallback policy = **require authenticated user** (everything is protected unless
 | `CanManageApplications` | TeamLead, Admin | TeamLead: own app only; Admin: any | application + team + SLA policy endpoints |
 | `CanViewDashboard` | any authenticated role | Results filtered to apps the user belongs to (Admin: all) | `/dashboard/*` |
 
-Policies are applied with `[Authorize(Policy = Policies.X)]` on the action. Where the policy has a team check, the
-controller/handler passes the resource through `IAuthorizationService.AuthorizeAsync(user, resource, requirement)`
+Policies are applied with `[Authorize(Policy = Policies.X)]` on the action and check **scope + role only**. A policy that carries
+a resource requirement would always fail under the endpoint middleware (no resource available), so the team check is a second,
+explicit step: the controller/handler calls `IAuthorizationService.AuthorizeAppAsync(user, applicationId, AppTeamRequirement.Member | MemberOrAdmin, ct)`
+(wraps `AuthorizeAsync(user, resource, requirement)`)
 — **no ad-hoc `if (user.IsInRole…)` in controllers or handlers.** Admin bypasses the team check only for
 `CanManageApplications` and `CanViewDashboard`; for incident actions Admin must still be a team member (no global bypass — decided; an ADR is required to change this).
 
 ### 6.1 Resource check (`AppTeamRequirement` / handler)
 
 `AppTeamAuthorizationHandler : AuthorizationHandler<AppTeamRequirement, IAppScoped>` where `IAppScoped` exposes
-`ApplicationId` (implemented by a small authorization-resource record the handler builds — **not** the EF entity).
+`ApplicationId` and the request `CancellationToken` (implemented by the `AppScopedResource` record — **not** the EF entity).
+`AppTeamRequirement.Member` never lets Admin bypass; `AppTeamRequirement.MemberOrAdmin` does (management + dashboard only).
 It calls `IAppTeamReader.IsMemberAsync` (Redis cache, TTL ≤ 30 s, keyed `team:{appId}:{userId}`; invalidated on team
 membership change). Not a member → `context.Fail()` → 403.
 
@@ -125,6 +132,7 @@ Write attempts on a visible incident without permission → 403.
 - Scope check: controllers require scope `access_as_user` (`RequiredScope` / scope claim in the fallback policy).
 - `MapInboundClaims = false` so claim names are the raw JWT names (`oid`, `groups`, `roles`); role claim type set to `ClaimTypes.Role`
   after transformation — one place, covered by tests.
+- `OnTokenValidated` additionally requires the `tid` claim to equal the configured `TenantId` (single tenant, D8); `TenantId` of `common`/`organizations`/`consumers` is rejected at startup.
 - Clock skew ≤ 2 min. Log failures at `Warning` with structured templates, **never log the token**.
 - `[AllowAnonymous]` only for health/readiness endpoints.
 
@@ -133,7 +141,7 @@ Write attempts on a visible incident without permission → 403.
 - Hub is `[Authorize]`. Browsers cannot set headers on WebSocket; accept the JWT from the `access_token` query string
   **only for paths starting with `/hubs`** (`JwtBearerEvents.OnMessageReceived`). Ensure the query string is not logged
   (redact in request logging/OpenTelemetry).
-- On connect, join groups: `app:{applicationId}` for every app the user belongs to, plus `app:{applicationId}:responders`
+- On connect, join groups (`HubGroups.App/Responders`, id formatted `N`): `app:{applicationId}` for every app the user belongs to, plus `app:{applicationId}:responders`
   when the user has a Responder-level role. Membership is computed at connect time via `IAppTeamReader` — if team membership
   changes, the user must reconnect (document in the frontend contract; optionally force-disconnect on removal).
 - `CommentAdded` for `IsInternal = true` is sent **only** to `app:{id}:responders`; public comments to `app:{id}`.
@@ -189,14 +197,15 @@ fixed system actor (`Actor.System`). If Graph lookups (e.g. resolve escalation c
   cache hit avoids reader call.
 - Options validation: missing `TenantId`/`ClientId`/empty `GroupRoleMap` fails on start.
 
-(If these classes live in `Api`, test them from the integration project or add an `Api.UnitTests` project via a spec update —
-**do not** reference `IncidentHub.Api` from `Application.UnitTests` or break the dependency direction.)
+The Api auth classes live in `Api`, so their unit tests are in `tests/IncidentHub.Api.UnitTests` (fast, no Docker; `Application.UnitTests`
+must never reference `IncidentHub.Api`). Use xUnit `FakeLogger<T>` to assert warnings.
 
 **Domain.UnitTests**
 - Every allowed **and** forbidden `TransitionTo` per role/actor against the workflow table (existing requirement; add `Actor` role cases).
 
-**Api.IntegrationTests** (`[Trait("Category", "Integration")]`, `WebApplicationFactory` + Testcontainers; a `TestAuthHandler`
-replaces JWT validation and lets tests set `oid`, `groups`/roles)
+**Api.IntegrationTests** (`[Trait("Category", "Integration")]`, `WebApplicationFactory` + Testcontainers; a policy scheme sends
+requests with an `X-Test-Oid` header to `TestAuthHandler` (sets `oid`, `groups`, `scp`) and everything else to the real JWT bearer handler;
+test-only `AuthProbeController` exposes one endpoint per policy and a comment broadcast endpoint)
 - 401 without token; 403 for authenticated user with no mapped role; 403 for wrong role per policy (table in §6).
 - Team check: member vs non-member on write (403) and read (404).
 - Reporter never receives internal comments via REST **and** SignalR; Responder does.
@@ -223,3 +232,18 @@ replaces JWT validation and lets tests set `oid`, `groups`/roles)
 | Apps open to all reporters? | **No.** Team membership is always required to report; no flag on `MonitoredApp`. |
 | Graph group-overage handling? | **Deferred.** Fail closed + warning log; future spec if it occurs. |
 | Tenancy? | **Single tenant, members only.** No B2B guest support. |
+
+## 17. Implementation status
+
+Implemented: config + validation, JWT bearer (incl. tenant check and hub query-string token), group → role claims transformation,
+`ICurrentUser`, the seven policies, `AppTeamRequirement` + handler + `AuthorizeAppAsync`, `User`/`AppTeamMember`/`MonitoredApp` (minimal)
+with migration `AddUsersAndAppTeams`, Redis-cached `IAppTeamReader` and `IUserDirectory`, ProblemDetails for 401/403/500,
+`IncidentsHub` with authorization and group joins, Swagger OAuth2 scheme, `contracts/swagger.json` (`scripts/generate-openapi.ps1`),
+unit + integration tests.
+
+Deferred to the features that introduce the needed pieces:
+- Applying policies and `AuthorizeAppAsync` to real controllers; 404 existence hiding on real incident reads (covered today by the probe controller).
+- `IsInternal` filtering in REST comment queries; the real post-commit `CommentAdded` broadcast (tests exercise the group routing only).
+- Per-role `Incident.TransitionTo` domain tests (no `Incident` aggregate yet).
+- Redacting `access_token` in OpenTelemetry URL tags (OpenTelemetry is not configured yet; ASP.NET request logging is already at `Warning`, so the query string is not logged).
+- Group-overage resolution via Graph, forced hub disconnect when team membership changes, calling `IAppTeamReader.InvalidateAsync` from team-management commands.

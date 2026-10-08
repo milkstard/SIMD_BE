@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <PropertyGroup>
+    <UserSecretsId>e7616a0d-11b3-4477-8b64-fcb20d6673ed</UserSecretsId>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\IncidentHub.Application\IncidentHub.Application.csproj" />
     <ProjectReference Include="..\IncidentHub.Infrastructure\IncidentHub.Infrastructure.csproj" />

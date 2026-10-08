@@ -1,28 +1,45 @@
+using IncidentHub.Api.Auth;
+using IncidentHub.Api.Errors;
+using IncidentHub.Api.Hubs;
+using IncidentHub.Api.Swagger;
 using IncidentHub.Application;
 using IncidentHub.Infrastructure;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+builder.Services.AddIncidentHubProblemDetails();
+builder.Services.AddIncidentHubAuthentication(builder.Configuration);
+builder.Services.AddIncidentHubAuthorization();
+
 builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddIncidentHubSwagger(builder.Configuration);
+
+builder.Services.AddSignalR().AddStackExchangeRedis(options =>
+{
+    options.Configuration = ConfigurationOptions.Parse(IncidentHub.Infrastructure.DependencyInjection.RequireConnectionString(builder.Configuration, "Redis"));
+    options.Configuration.AbortOnConnectFail = false;
+});
 
 var app = builder.Build();
 
+app.UseMiddleware<ProblemDetailsMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseIncidentHubSwagger(app.Configuration);
 }
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<IncidentsHub>("/hubs/incidents", options => options.CloseOnAuthenticationExpiration = true);
 
 app.Run();
 

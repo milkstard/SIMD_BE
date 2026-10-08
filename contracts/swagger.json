@@ -1,0 +1,31 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "IncidentHub API",
+    "version": "v1"
+  },
+  "paths": { },
+  "components": {
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000001/oauth2/v2.0/authorize",
+            "tokenUrl": "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000001/oauth2/v2.0/token",
+            "scopes": {
+              "api://00000000-0000-0000-0000-000000000002/access_as_user": "Access IncidentHub as the signed-in user"
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "oauth2": [
+        "api://00000000-0000-0000-0000-000000000002/access_as_user"
+      ]
+    }
+  ]
+}

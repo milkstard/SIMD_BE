@@ -44,6 +44,7 @@ code behaves (state machine, outbox, SLA, security) is specified in CLAUDE.md an
 └── tests/
     ├── IncidentHub.Domain.UnitTests/
     ├── IncidentHub.Application.UnitTests/
+    ├── IncidentHub.Api.UnitTests/
     └── IncidentHub.Api.IntegrationTests/
 ```
 
@@ -60,6 +61,7 @@ graph TD
   Worker --> Infra
   DUT[Domain.UnitTests] --> Domain
   AUT[Application.UnitTests] --> App
+  APUT[Api.UnitTests] --> Api
   AIT[Api.IntegrationTests] --> Api
 ```
 
@@ -86,14 +88,14 @@ Incidents/       # Incident (aggregate, TransitionTo), IncidentStatus, Severity,
   Events/        # IncidentReported, IncidentTransitioned, IncidentAssigned, SeverityChanged, CommentAdded, AttachmentAdded
 Apps/            # MonitoredApp, AppEnvironment (Production, …), AppStatus, AppStatusCalculator, AppTeamMember
 Sla/             # SlaPolicy, SlaClock (computes AckDueAt / ResolveDueAt)
-Users/           # UserRole (Reporter, Responder, TeamLead, Admin), Actor (who performed an action)
+Users/           # User (Entra oid ↔ internal id), UserRole (Reporter, Responder, TeamLead, Admin), Actor (who performed an action)
 Outbox/          # OutboxMessage (Id, Type, Payload, OccurredAt, ProcessedAt, Attempts)
 ```
 
 ### 5.2 `src/IncidentHub.Application`
 
 ```
-Abstractions/    # IAppDbContext, IFileStore, INotificationSender, IIncidentNotifier, ICurrentUser,
+Abstractions/    # IAppDbContext, IFileStore, INotificationSender, IIncidentNotifier, ICurrentUser, IAppTeamReader, IUserDirectory,
                  # IDashboardCache, IDistributedLock, IIdempotencyStore, IHtmlSanitizer
 Behaviors/       # ValidationBehavior, LoggingBehavior (MediatR pipeline)
 Incidents/
@@ -161,8 +163,9 @@ appsettings.json
 ```
 IncidentHub.Domain.UnitTests/         # mirrors Domain folders: Incidents/IncidentWorkflowTests.cs, Sla/SlaClockTests.cs, …
 IncidentHub.Application.UnitTests/    # mirrors Application: Incidents/ReportIncident/ReportIncidentHandlerTests.cs, …
+IncidentHub.Api.UnitTests/            # fast tests of Api classes that need no host: Auth/GroupRoleClaimsTransformationTests.cs, …
 IncidentHub.Api.IntegrationTests/
-  Infrastructure/                     # ApiFactory (WebApplicationFactory + Testcontainers), TestAuthHandler
+  Infrastructure/                     # ApiFactory (WebApplicationFactory + Testcontainers), TestAuthHandler, TestJwt, AuthProbeController
   Incidents/  Auth/  Hubs/  Outbox/   # [Trait("Category", "Integration")] on every class
 ```
 
@@ -188,6 +191,7 @@ and Microsoft.Identity.Web ≥ 4.x (both still support net8.0).
 | Api | Microsoft.Identity.Web, Microsoft.AspNetCore.SignalR.StackExchangeRedis, Swashbuckle.AspNetCore, OpenTelemetry.Extensions.Hosting, OpenTelemetry.Instrumentation.AspNetCore, Microsoft.EntityFrameworkCore.Design |
 | Worker | OpenTelemetry.Extensions.Hosting |
 | Domain.UnitTests / Application.UnitTests | xunit, xunit.runner.visualstudio, Microsoft.NET.Test.Sdk, FluentAssertions, NSubstitute |
+| Api.UnitTests | the above + Microsoft.Extensions.Diagnostics.Testing (`FakeLogger`) |
 | Api.IntegrationTests | the above + Microsoft.AspNetCore.Mvc.Testing, Testcontainers.MsSql, Testcontainers.Redis, Microsoft.AspNetCore.SignalR.Client |
 
 ## 8. Scaffold order (for later implementation)
