@@ -10,6 +10,16 @@ and **monitor** application incidents. Two processes share one codebase:
 Stores: **SQL Server** (all incident data, EF Core 8), **Redis** (dashboard cache, SignalR backplane,
 locks), **Blob Storage** (attachments). There is NO time-series DB and NO message broker in v1.
 
+## Reference docs
+Imported (loaded into context every session):
+- Database schema — tables, columns, indexes, schema rules. Consult before touching entities, EF configurations or migrations: @docs/DATABASE.md
+- API contracts — endpoints, DTOs, enums, errors, SignalR events. Update it in the same change as any endpoint/DTO change: @docs/API-CONTRACT.md
+- Architecture decisions (ADRs) — one file per decision that changes the architecture; these override the sections below if they conflict.
+  Add an `@docs/adr/<NNNN-title>.md` import line here whenever a new ADR is created (imports don't support globs or directories):
+
+Reference only (NOT imported — read on demand when you need the original rationale, requirements or trade-offs):
+- `docs/System Design Service Incident & Monitoring Dashboard.md`
+
 ## Commands
 ```bash
 docker compose up -d                                  # SQL Server, Redis, Azurite
