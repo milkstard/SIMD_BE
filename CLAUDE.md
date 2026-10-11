@@ -20,6 +20,9 @@ Imported (loaded into context every session):
 - Current implementation status — an audit of the spec being implemented. **Update it before starting an implementation**
   (spec, state `In progress`, planned steps) and **when done or blocked** (state, ticked steps, verification results, log line):
 @docs/implementation/current-status.md
+- **Post-implementation review:** as soon as you set a spec's state to `Done` in `current-status.md`, run the
+  `/review-spec` skill (QA + security agents in parallel, then the senior code reviewer). Don't call a spec approved
+  until it reports **Approved**.
 
 Reference only (NOT imported — read on demand when you need the original rationale, requirements or trade-offs):
 - `docs/System Design Service Incident & Monitoring Dashboard.md`
