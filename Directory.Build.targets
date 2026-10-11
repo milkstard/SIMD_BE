@@ -1,6 +1,6 @@
 <Project>
   <!--
-    Clean Architecture guard (BE-01, .claude/specs/solution-layout.md §4): fails the build when a src/ project references
+    Clean Architecture guard (BE-01, docs/specs/solution-layout.md §4): fails the build when a src/ project references
     a layer it must not. Domain -> nothing; Application -> Domain; Infrastructure -> Application; Api/Worker -> Application,
     Infrastructure. ADR 0001 allows Application only the core Microsoft.EntityFrameworkCore package, never a provider.
   -->
@@ -22,8 +22,8 @@
     </ItemGroup>
 
     <Error Code="IH0001" ContinueOnError="ErrorAndContinue" Condition="'@(_IhForbiddenProjectRef)' != ''"
-           Text="$(MSBuildProjectName) must not reference @(_IhForbiddenProjectRef->'%(Filename)', ', '). Allowed: $(_IhAllowedText) (see .claude/specs/solution-layout.md §4)." />
+           Text="$(MSBuildProjectName) must not reference @(_IhForbiddenProjectRef->'%(Filename)', ', '). Allowed: $(_IhAllowedText) (see docs/specs/solution-layout.md §4)." />
     <Error Code="IH0002" Condition="'@(_IhForbiddenPackageRef)' != ''"
-           Text="$(MSBuildProjectName) must not reference package(s) @(_IhForbiddenPackageRef, ', ') (see .claude/specs/solution-layout.md §4 and docs/adr/0001-ef-core-in-application.md)." />
+           Text="$(MSBuildProjectName) must not reference package(s) @(_IhForbiddenPackageRef, ', ') (see docs/specs/solution-layout.md §4 and docs/adr/0001-ef-core-in-application.md)." />
   </Target>
 </Project>

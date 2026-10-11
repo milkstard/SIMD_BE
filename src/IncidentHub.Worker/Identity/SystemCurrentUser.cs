@@ -4,7 +4,7 @@ using IncidentHub.Domain.Users;
 namespace IncidentHub.Worker.Identity;
 
 /// <summary>
-/// The Worker never acts as a signed-in user (.claude/specs/entra-id-authorization.md §12): handlers it runs see the fixed
+/// The Worker never acts as a signed-in user (docs/specs/entra-id-authorization.md §12): handlers it runs see the fixed
 /// system actor, with no roles, so any user-scoped check fails closed.
 /// </summary>
 public sealed class SystemCurrentUser : ICurrentUser

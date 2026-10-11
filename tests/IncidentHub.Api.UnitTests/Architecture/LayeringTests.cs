@@ -6,7 +6,7 @@ namespace IncidentHub.Api.UnitTests.Architecture;
 
 /// <summary>
 /// Backstop for the build-time guard in Directory.Build.targets: checks the compiled assemblies, so it also catches
-/// layer leaks that arrive transitively through a package (.claude/specs/solution-layout.md §4, ADR 0001).
+/// layer leaks that arrive transitively through a package (docs/specs/solution-layout.md §4, ADR 0001).
 /// </summary>
 public sealed class LayeringTests
 {

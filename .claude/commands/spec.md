@@ -1,14 +1,14 @@
 ---
-description: Generate implementation spec(s) in .claude/specs/ for a BE-NN item from docs/BACKEND-SPECS.md
+description: Generate implementation spec(s) in docs/specs/ for a BE-NN item from docs/BACKEND-SPECS.md
 argument-hint: <NN>  (e.g. 03, 04, 05)
-allowed-tools: Read, Glob, Grep, Write, AskUserQuestion
+allowed-tools: Read, Glob, Grep, Write, Edit, AskUserQuestion
 ---
 
 # /spec — turn a BACKEND-SPECS item into detailed spec file(s)
 
 Argument received: `$ARGUMENTS`
 
-You only write spec files. **Do not implement any code.**
+You only write spec files and update `docs/implementation/deferred-items.md`. **Do not implement any code.**
 
 ## 1. Validate the parameter
 1. Grep `docs/BACKEND-SPECS.md` for headings matching `^### BE-\d+` to find the BE numbers that really exist
@@ -21,8 +21,11 @@ You only write spec files. **Do not implement any code.**
 ## 2. Gather context
 - Read the `### BE-NN · <title>` section of `docs/BACKEND-SPECS.md` (Context, Requirements, Acceptance Criteria, Dependencies).
 - Read `docs/DATABASE.md` and `docs/API-CONTRACT.md` for the tables, DTOs, endpoints and errors involved.
-- Read existing files in `.claude/specs/` for style and already-decided names (e.g. BE-02 "Naming as built"),
+- Read existing files in `docs/specs/` for style and already-decided names (e.g. BE-02 "Naming as built"),
   and the specs of this item's listed Dependencies if they exist.
+- Read `docs/implementation/deferred-items.md`. Every item deferred to this BE-NN (or now required by it) goes into
+  the scope and acceptance criteria of the right part. Never leave an item deferred if this BE item needs it.
+  If it's unclear whether an item belongs here, ask the user.
 - `CLAUDE.md` rules always apply (Clean Architecture direction, one use case = command + handler + validator,
   outbox, `TimeProvider`, ProblemDetails, xUnit naming, etc.).
 
@@ -35,10 +38,10 @@ You only write spec files. **Do not implement any code.**
 
 ## 4. File naming — `<NN>_<nn>_<specabout>`
 - `NN` = the parameter; `nn` = 2-digit incremental part number starting at `01`.
-- Single spec: `.claude/specs/NN_01_<specabout>.md`.
-- Breakdown: `.claude/specs/NN_01_<part-slug>.md`, `NN_02_<part-slug>.md`, … where `<part-slug>` names what that part covers
+- Single spec: `docs/specs/NN_01_<specabout>.md`.
+- Breakdown: `docs/specs/NN_01_<part-slug>.md`, `NN_02_<part-slug>.md`, … where `<part-slug>` names what that part covers
   (e.g. `03_01_catalog-entities-and-migration.md`, `03_02_catalog-endpoints.md`).
-- If any `.claude/specs/NN_*` file already exists, stop and ask the user before overwriting.
+- If any `docs/specs/NN_*` file already exists, stop and ask the user before overwriting.
 
 ## 5. Spec template (every file)
 ```
@@ -57,5 +60,13 @@ You only write spec files. **Do not implement any code.**
 ```
 Never silently resolve a conflict between docs; list it under Open questions.
 
-## 6. Report
-List each file created with a one-line summary and the suggested implementation order. Stop there.
+## 6. Update deferred items
+- For each item a spec's **Out of scope** explicitly schedules for a later phase or BE item, add a row to
+  `docs/implementation/deferred-items.md` (Item, Source spec, Deferred to, Notes). Skip duplicates, and skip anything
+  that is plainly "not this project" rather than "later".
+- Never move a mandatory requirement of this BE item into deferred items.
+- Do not touch `completed-items.md`. Items move there only when an implementation delivers them.
+
+## 7. Report
+List each file created with a one-line summary, the deferred items added or pulled into scope, and the suggested
+implementation order. Stop there.

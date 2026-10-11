@@ -34,7 +34,7 @@ Implement in ID order within a phase; phases are sequential.
 - Policies: `CanReportIncident`, `CanTransitionIncident`, `CanAssign`, `CanComment`
 - `CurrentUserService`: exposes user id, name, email, roles from the validated JWT
 
-> **Naming as built** (authoritative: [`.claude/specs/entra-id-authorization.md`](../.claude/specs/entra-id-authorization.md) §3, §6, §7):
+> **Naming as built** (authoritative: [`docs/specs/entra-id-authorization.md`](specs/entra-id-authorization.md) §3, §6, §7):
 > `CanAssign` → `CanAssignIncident`, `CanComment` → `CanCommentInternally`; `CurrentUserService` → `ICurrentUser`
 > (`Application/Abstractions`) implemented by `CurrentUser` (`Api/Auth`). The suffix-less name is the repo convention for
 > read-only views of ambient context. Extra policies: `CanViewIncident`, `CanManageApplications`, `CanViewDashboard`.
