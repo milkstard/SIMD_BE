@@ -22,12 +22,14 @@ public sealed class ListAppsHandler(IAppDbContext db, ICurrentUser user)
             visible = visible.Where(a => a.IsActive);
         }
 
-        var ordered = AppQueries.Project(db, visible).OrderBy(a => a.Name).ThenBy(a => a.Id);
+        // Order, seek and limit on the entity: EF cannot translate ordering on a constructor-projected DTO.
+        var ordered = visible.OrderBy(a => a.Name).ThenBy(a => a.Id);
         var filtered = cursor is { } c
             ? ordered.Where(a => a.Name.CompareTo(c.Name) > 0 || (a.Name == c.Name && a.Id.CompareTo(c.Id) > 0))
             : ordered;
 
-        var rows = await filtered.Take(request.Limit + 1).ToListAsync(cancellationToken);
+        var page = AppQueries.Project(db, filtered.Take(request.Limit + 1));
+        var rows = await page.ToListAsync(cancellationToken);
 
         string? next = null;
         if (rows.Count > request.Limit)
