@@ -243,11 +243,11 @@ Implemented: config + validation, JWT bearer (incl. tenant check and hub query-s
 `ICurrentUser`, the seven policies, `AppTeamRequirement` + handler + `AuthorizeAppAsync`, `User`/`AppTeamMember`/`MonitoredApp` (minimal)
 with migration `AddUsersAndAppTeams`, Redis-cached `IAppTeamReader` and `IUserDirectory`, ProblemDetails for 401/403/500,
 `IncidentsHub` with authorization and group joins, Swagger OAuth2 scheme, `contracts/swagger.json` (`scripts/generate-openapi.ps1`),
-unit + integration tests.
+unit + integration tests. `access_token` redaction in OpenTelemetry URL tags landed with BE-01's observability wiring
+(`ApiTelemetry.RedactAccessToken`; Serilog request logging records the path only).
 
 Deferred to the features that introduce the needed pieces:
 - Applying policies and `AuthorizeAppAsync` to real controllers; 404 existence hiding on real incident reads (covered today by the probe controller).
 - `IsInternal` filtering in REST comment queries; the real post-commit `CommentAdded` broadcast (tests exercise the group routing only).
 - Per-role `Incident.TransitionTo` domain tests (no `Incident` aggregate yet).
-- Redacting `access_token` in OpenTelemetry URL tags (OpenTelemetry is not configured yet; ASP.NET request logging is already at `Warning`, so the query string is not logged).
 - Group-overage resolution via Graph, forced hub disconnect when team membership changes, calling `IAppTeamReader.InvalidateAsync` from team-management commands.

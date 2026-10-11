@@ -4,11 +4,21 @@ using IncidentHub.Api.Errors;
 using IncidentHub.Api.Filters;
 using IncidentHub.Api.Hubs;
 using IncidentHub.Api.Swagger;
+using IncidentHub.Api.Telemetry;
 using IncidentHub.Application;
 using IncidentHub.Infrastructure;
+using IncidentHub.Infrastructure.Telemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using Serilog;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddIncidentHubObservability(
+    ApiTelemetry.Source,
+    tracing => tracing.AddAspNetCoreInstrumentation(options => options.EnrichWithHttpRequest = ApiTelemetry.RedactAccessToken),
+    metrics => metrics.AddAspNetCoreInstrumentation());
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -37,6 +47,7 @@ builder.Services.AddSignalR().AddStackExchangeRedis(options =>
 var app = builder.Build();
 
 app.UseMiddleware<ProblemDetailsMiddleware>();
+app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {

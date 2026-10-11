@@ -26,9 +26,10 @@ code behaves (state machine, outbox, SLA, security) is specified in CLAUDE.md an
 ├── global.json                    # SDK 8.0.100, rollForward: latestMajor (only SDK 9 installed; builds net8.0)
 ├── Directory.Build.props          # net8.0, LangVersion 12, Nullable, ImplicitUsings, TreatWarningsAsErrors
 ├── Directory.Packages.props       # central package versions (ManagePackageVersionsCentrally)
+├── Directory.Build.targets        # ValidateLayering: build error IH0001/IH0002 on a forbidden project/package reference (§4)
 ├── .editorconfig                  # file-scoped namespaces, sealed-by-default analyzers, dotnet format rules
 ├── .gitignore                     # existing (dotnet new gitignore + secrets)
-├── docker-compose.yml             # mssql, redis, azurite
+├── docker-compose.yml             # mssql, redis, azurite (healthchecks); aspire-dashboard under profile `observability`
 ├── .config/
 │   └── dotnet-tools.json          # dotnet-ef, swashbuckle.aspnetcore.cli
 ├── contracts/
@@ -133,6 +134,7 @@ Storage/                 # BlobFileStore (upload, 5-min SAS links)
 Notifications/           # EmailNotificationSender, TeamsNotificationSender, NotificationRouter
 Security/                # HtmlSanitizerAdapter (IHtmlSanitizer)
 Resilience/              # Polly pipelines per outbound channel (timeout, retry+jitter, circuit breaker)
+Telemetry/               # InfrastructureTelemetry (ActivitySource), AddIncidentHubObservability (Serilog + OTel), StartupDiagnostics
 DependencyInjection.cs   # AddInfrastructure(config)
 ```
 
@@ -148,6 +150,7 @@ Auth/                    # Policies (constants + registration), AppTeamRequireme
 Errors/                  # ProblemDetailsMiddleware (Result/exception → RFC 7807 with traceId)
 Filters/                 # IdempotencyFilter (Idempotency-Key), IfMatchFilter (RowVersion ↔ ETag)
 Contracts/               # HTTP request models (mapped to commands in controllers)
+Telemetry/               # ApiTelemetry (ActivitySource, access_token redaction)
 appsettings.json         # non-secret config only
 ```
 
@@ -156,6 +159,8 @@ appsettings.json         # non-secret config only
 ```
 Program.cs               # host, OpenTelemetry, AddApplication/AddInfrastructure
 Jobs/                    # OutboxDispatcher, SlaMonitor, DailyStatsJob (BackgroundService each)
+Telemetry/               # WorkerTelemetry (ActivitySource)
+Identity/                # SystemCurrentUser (ICurrentUser = Actor.System; the Worker never acts as a user)
 appsettings.json
 ```
 
@@ -188,12 +193,12 @@ and Microsoft.Identity.Web ≥ 4.x (both still support net8.0).
 |---|---|
 | Domain | — |
 | Application | MediatR, FluentValidation, FluentValidation.DependencyInjectionExtensions, Microsoft.Extensions.Logging.Abstractions |
-| Infrastructure | Microsoft.EntityFrameworkCore.SqlServer, StackExchange.Redis, Azure.Storage.Blobs, HtmlSanitizer, Microsoft.Extensions.Http.Resilience |
-| Api | Microsoft.Identity.Web, Microsoft.AspNetCore.SignalR.StackExchangeRedis, Swashbuckle.AspNetCore, OpenTelemetry.Extensions.Hosting, OpenTelemetry.Instrumentation.AspNetCore, Microsoft.EntityFrameworkCore.Design |
-| Worker | OpenTelemetry.Extensions.Hosting |
+| Infrastructure | Microsoft.EntityFrameworkCore.SqlServer, StackExchange.Redis, Azure.Storage.Blobs, HtmlSanitizer, Microsoft.Extensions.Http.Resilience, Serilog.Extensions.Hosting, Serilog.Settings.Configuration, Serilog.Sinks.Console, Serilog.Sinks.OpenTelemetry, OpenTelemetry.Extensions.Hosting, OpenTelemetry.Exporter.OpenTelemetryProtocol (≥ 1.15.3, GHSA-4625-4j76-fww9), OpenTelemetry.Instrumentation.Http |
+| Api | Microsoft.Identity.Web, Microsoft.AspNetCore.SignalR.StackExchangeRedis, Swashbuckle.AspNetCore, Serilog.AspNetCore, OpenTelemetry.Instrumentation.AspNetCore, Microsoft.EntityFrameworkCore.Design |
+| Worker | Microsoft.Extensions.Hosting (observability comes via Infrastructure) |
 | Domain.UnitTests / Application.UnitTests | xunit, xunit.runner.visualstudio, Microsoft.NET.Test.Sdk, FluentAssertions, NSubstitute |
 | Api.UnitTests | the above + Microsoft.Extensions.Diagnostics.Testing (`FakeLogger`) |
-| Api.IntegrationTests | the above + Microsoft.AspNetCore.Mvc.Testing, Testcontainers.MsSql, Testcontainers.Redis, Microsoft.AspNetCore.SignalR.Client |
+| Api.IntegrationTests | the above + Microsoft.AspNetCore.Mvc.Testing, Testcontainers.MsSql, Testcontainers.Redis, Microsoft.AspNetCore.SignalR.Client, OpenTelemetry.Exporter.InMemory |
 
 ## 8. Scaffold order (for later implementation)
 

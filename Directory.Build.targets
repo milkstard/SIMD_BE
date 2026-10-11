@@ -1,0 +1,29 @@
+<Project>
+  <!--
+    Clean Architecture guard (BE-01, .claude/specs/solution-layout.md §4): fails the build when a src/ project references
+    a layer it must not. Domain -> nothing; Application -> Domain; Infrastructure -> Application; Api/Worker -> Application,
+    Infrastructure. ADR 0001 allows Application only the core Microsoft.EntityFrameworkCore package, never a provider.
+  -->
+  <PropertyGroup>
+    <_IhAllowedProjectRefs Condition="'$(MSBuildProjectName)' == 'IncidentHub.Domain'">;</_IhAllowedProjectRefs>
+    <_IhAllowedProjectRefs Condition="'$(MSBuildProjectName)' == 'IncidentHub.Application'">;IncidentHub.Domain;</_IhAllowedProjectRefs>
+    <_IhAllowedProjectRefs Condition="'$(MSBuildProjectName)' == 'IncidentHub.Infrastructure'">;IncidentHub.Application;</_IhAllowedProjectRefs>
+    <_IhAllowedProjectRefs Condition="'$(MSBuildProjectName)' == 'IncidentHub.Api'">;IncidentHub.Application;IncidentHub.Infrastructure;</_IhAllowedProjectRefs>
+    <_IhAllowedProjectRefs Condition="'$(MSBuildProjectName)' == 'IncidentHub.Worker'">;IncidentHub.Application;IncidentHub.Infrastructure;</_IhAllowedProjectRefs>
+    <_IhAllowedText>$(_IhAllowedProjectRefs.Trim(';').Replace(';', ', '))</_IhAllowedText>
+    <_IhAllowedText Condition="'$(_IhAllowedText)' == ''">nothing</_IhAllowedText>
+  </PropertyGroup>
+
+  <Target Name="ValidateLayering" BeforeTargets="ResolveProjectReferences;CollectPackageReferences" Condition="'$(_IhAllowedProjectRefs)' != ''">
+    <ItemGroup>
+      <_IhForbiddenProjectRef Include="@(ProjectReference)" Condition="!$(_IhAllowedProjectRefs.Contains(';%(Filename);'))" />
+      <_IhForbiddenPackageRef Include="@(PackageReference)" Condition="'$(MSBuildProjectName)' == 'IncidentHub.Domain'" />
+      <_IhForbiddenPackageRef Include="@(PackageReference)" Condition="'$(MSBuildProjectName)' == 'IncidentHub.Application' And ($([System.String]::Copy('%(Identity)').StartsWith('Microsoft.AspNetCore')) Or ($([System.String]::Copy('%(Identity)').StartsWith('Microsoft.EntityFrameworkCore.')) And '%(Identity)' != 'Microsoft.EntityFrameworkCore.Abstractions'))" />
+    </ItemGroup>
+
+    <Error Code="IH0001" ContinueOnError="ErrorAndContinue" Condition="'@(_IhForbiddenProjectRef)' != ''"
+           Text="$(MSBuildProjectName) must not reference @(_IhForbiddenProjectRef->'%(Filename)', ', '). Allowed: $(_IhAllowedText) (see .claude/specs/solution-layout.md §4)." />
+    <Error Code="IH0002" Condition="'@(_IhForbiddenPackageRef)' != ''"
+           Text="$(MSBuildProjectName) must not reference package(s) @(_IhForbiddenPackageRef, ', ') (see .claude/specs/solution-layout.md §4 and docs/adr/0001-ef-core-in-application.md)." />
+  </Target>
+</Project>

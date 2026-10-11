@@ -19,9 +19,9 @@ Implement in ID order within a phase; phases are sequential.
 - Serilog + OpenTelemetry wired in both `Api/Program.cs` and `Worker/Program.cs`
 
 **Acceptance Criteria:**
-- [ ] `dotnet build` succeeds with zero project-reference violations
-- [ ] `docker compose up -d` brings up all three containers healthy
-- [ ] A log line and a trace span are emitted on API startup
+- [x] `dotnet build` succeeds with zero project-reference violations
+- [x] `docker compose up -d` brings up all three containers healthy
+- [x] A log line and a trace span are emitted on API startup
 **Dependencies:** none
 
 ---

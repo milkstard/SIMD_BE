@@ -23,7 +23,8 @@ Reference only (NOT imported — read on demand when you need the original ratio
 
 ## Commands
 ```bash
-docker compose up -d                                  # SQL Server, Redis, Azurite
+docker compose up -d                                  # SQL Server, Redis, Azurite (all with healthchecks)
+docker compose --profile observability up -d          # + Aspire dashboard (traces/logs UI on :18888, OTLP on :4317)
 dotnet build
 dotnet test                                           # all tests (integration tests need Docker)
 dotnet test --filter Category!=Integration            # fast unit tests only
@@ -37,7 +38,8 @@ After changing any endpoint or DTO, regenerate the OpenAPI spec (`swagger.json` 
 Run `scripts/generate-openapi.ps1` (uses fixed placeholder config so the output is stable).
 
 Local config (user-secrets, never committed): `AzureAd:TenantId`, `AzureAd:ClientId`, `Authorization:GroupRoleMap:<group-id>` = role,
-`ConnectionStrings:Sql`, `ConnectionStrings:Redis`. The API refuses to start without the Entra settings. See `.claude/specs/entra-id-authorization.md`.
+`ConnectionStrings:Sql`, `ConnectionStrings:Redis`. Optional: `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://localhost:4317`)
+enables OTLP export of traces, metrics and Serilog logs; without it, logs go to the console only. The API refuses to start without the Entra settings. See `.claude/specs/entra-id-authorization.md`.
 
 ## Solution layout (Clean Architecture — respect the dependency direction)
 ```
@@ -51,6 +53,7 @@ tests/
   Domain.UnitTests, Application.UnitTests, Api.UnitTests, Api.IntegrationTests (Testcontainers)
 ```
 Domain → nothing. Application → Domain. Infrastructure → Application. Api/Worker → all.
+`Directory.Build.targets` fails the build (`IH0001`/`IH0002`) on a reference that breaks this; `LayeringTests` backs it up.
 Never reference EF Core, ASP.NET or Infrastructure types from Domain or Application.
 
 ## Core domain rules (do not bypass)
@@ -128,7 +131,8 @@ Never reference EF Core, ASP.NET or Infrastructure types from Domain or Applicat
 - Records for DTOs/commands. Primary constructors for DI-only classes.
 - Use `TimeProvider` (inject it) — never `DateTime.Now`/`UtcNow` directly. Store all times as UTC (`DateTimeOffset`).
 - Logging via `ILogger<T>` with structured templates (`"Incident {IncidentNumber} resolved"`), no string interpolation.
-- OpenTelemetry is configured in `Api/Program.cs` and `Worker/Program.cs`; add spans for new outbound calls.
+- Serilog + OpenTelemetry are wired by `AddIncidentHubObservability` (`Infrastructure/Telemetry`), called from `Api/Program.cs`
+  and `Worker/Program.cs`; add spans for new outbound calls on `InfrastructureTelemetry.Source`.
 
 ## Don'ts
 - Don't add a message broker, microservice, or new database without an ADR in `/docs/adr`.
