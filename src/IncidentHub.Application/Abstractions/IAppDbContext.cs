@@ -1,4 +1,5 @@
 using IncidentHub.Domain.Apps;
+using IncidentHub.Domain.Incidents;
 using IncidentHub.Domain.Teams;
 using IncidentHub.Domain.Users;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +16,11 @@ public interface IAppDbContext
     DbSet<TeamMember> TeamMembers { get; }
 
     DbSet<MonitoredApp> Applications { get; }
+
+    DbSet<Incident> Incidents { get; }
+
+    /// <summary>Append-only audit rows; read them through <see cref="Incident.History"/> or query directly for paging.</summary>
+    DbSet<IncidentHistory> IncidentHistory { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

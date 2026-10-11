@@ -1,6 +1,7 @@
 services:
   mssql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    build: docker/mssql-fts # SQL Server 2022 + Full-Text Search (needed by migration AddIncidents)
+    image: incidenthub/mssql-fts:2022
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-IncidentHub_Dev_123!}" # local dev only

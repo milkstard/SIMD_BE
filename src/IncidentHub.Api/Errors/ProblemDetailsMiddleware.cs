@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using FluentValidation;
 using IncidentHub.Application.Common.Exceptions;
+using IncidentHub.Domain.Incidents;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,8 @@ public sealed class ProblemDetailsMiddleware(
     IProblemDetailsService problemDetails,
     ILogger<ProblemDetailsMiddleware> logger)
 {
+    private const string InvalidTransitionType = "https://incidenthub/errors/invalid-transition";
+
     public async Task InvokeAsync(HttpContext context)
     {
         try
@@ -52,6 +55,34 @@ public sealed class ProblemDetailsMiddleware(
             {
                 Status = StatusCodes.Status404NotFound,
                 Title = "Not found",
+                Detail = exception.Message,
+            });
+        }
+        catch (TransitionRequirementException exception) when (!context.Response.HasStarted)
+        {
+            await WriteAsync(context, new HttpValidationProblemDetails(
+                new Dictionary<string, string[]> { [exception.Field] = [exception.Message] })
+            {
+                Status = StatusCodes.Status422UnprocessableEntity,
+                Title = "Validation failed",
+            });
+        }
+        catch (TransitionNotPermittedException exception) when (!context.Response.HasStarted)
+        {
+            await WriteAsync(context, new ProblemDetails
+            {
+                Status = StatusCodes.Status403Forbidden,
+                Title = "Transition not permitted",
+                Detail = exception.Message,
+            });
+        }
+        catch (Exception exception) when (exception is InvalidTransitionException or IncidentClosedException && !context.Response.HasStarted)
+        {
+            await WriteAsync(context, new ProblemDetails
+            {
+                Type = InvalidTransitionType,
+                Status = StatusCodes.Status409Conflict,
+                Title = "Transition not allowed",
                 Detail = exception.Message,
             });
         }

@@ -92,7 +92,7 @@ The core aggregate.
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | `uniqueidentifier` | PK |
-| `Number` | `int` | not null, unique — from SQL `SEQUENCE`, displayed as `INC-{Number}` |
+| `Number` | `int` | not null, unique — from SQL `SEQUENCE dbo.IncidentNumbers` (starts at 1001), displayed as `INC-{Number}` |
 | `ApplicationId` | `uniqueidentifier` | FK → `Applications.Id`, not null |
 | `Environment` | `nvarchar(30)` | not null, e.g. `Production` |
 | `Title` | `nvarchar(300)` | not null |
@@ -101,7 +101,7 @@ The core aggregate.
 | `Severity` | `nvarchar(20)` | `Critical` \| `High` \| `Medium` \| `Low` |
 | `Priority` | `nvarchar(20)` | nullable, independent of severity |
 | `Status` | `nvarchar(20)` | `New` \| `Triaged` \| `InProgress` \| `OnHold` \| `Resolved` \| `Reopened` \| `Closed` — **set only via `Incident.TransitionTo`** |
-| `Source` | `nvarchar(20)` | `UserReported` \| `Webhook` |
+| `Source` | `nvarchar(20)` | `Manual` \| `Webhook` |
 | `ReporterId` | `uniqueidentifier` | FK → `Users.Id`, not null |
 | `AssigneeId` | `uniqueidentifier` | FK → `Users.Id`, nullable |
 | `AssignedTeamId` | `uniqueidentifier` | FK → `Teams.Id`, nullable |
@@ -113,14 +113,16 @@ The core aggregate.
 | `AcknowledgedAt` | `datetimeoffset` | nullable |
 | `ResolvedAt` | `datetimeoffset` | nullable |
 | `ClosedAt` | `datetimeoffset` | nullable |
-| `CloseReason` | `nvarchar(30)` | nullable — `Fixed` \| `Duplicate` \| `Invalid` \| `WontFix` |
+| `CloseReason` | `nvarchar(30)` | nullable — `Fixed` \| `Duplicate` \| `Invalid` \| `CannotReproduce` |
+| `DuplicateOfId` | `uniqueidentifier` | FK → `Incidents.Id` (self), nullable — set only when `CloseReason = Duplicate` |
 | `CreatedAt` | `datetimeoffset` | not null |
+| `UpdatedAt` | `datetimeoffset` | not null — set on every change to the incident; feeds `updatedAt` and the `-updatedAt` sort |
 | `RowVersion` | `rowversion` | concurrency token — required for `If-Match` on every write |
 
 **Indexes:**
 - `IX_Incidents_Status_Severity` on `(Status, Severity)` `INCLUDE (ApplicationId, AssigneeId)` — dashboard/list filtering
 - `IX_Incidents_Application_CreatedAt` on `(ApplicationId, CreatedAt)` — per-app history/trend queries
-- Full-text index on `Title`, `Description` — search and duplicate hints
+- Full-text index on `Title`, `Description` (catalog `ftIncidentHub`, key index `PK_Incidents`) — search and duplicate hints; needs SQL Server with Full-Text Search (`docker/mssql-fts` locally)
 - Unique filtered index on `Fingerprint` `WHERE Status <> 'Closed'` — prevents duplicate open incidents
 - Unique on `Number`
 
@@ -133,11 +135,11 @@ Append-only audit trail. Never updated or deleted.
 |---|---|---|
 | `Id` | `uniqueidentifier` | PK |
 | `IncidentId` | `uniqueidentifier` | FK → `Incidents.Id`, not null |
-| `Field` | `nvarchar(50)` | e.g. `Status`, `Severity`, `AssigneeId` |
+| `Field` | `nvarchar(50)` | the entity property name, e.g. `Status`, `Severity`, `AssigneeId`; the API maps it to a display name |
 | `OldValue` | `nvarchar(max)` | nullable |
 | `NewValue` | `nvarchar(max)` | nullable |
 | `Note` | `nvarchar(1000)` | nullable — optional note on a transition |
-| `ActorId` | `uniqueidentifier` | FK → `Users.Id`, not null |
+| `ActorId` | `uniqueidentifier` | FK → `Users.Id`, nullable — `null` = the system (SLA job, webhook) |
 | `CreatedAt` | `datetimeoffset` | not null |
 
 **Indexes:** `(IncidentId, CreatedAt)` — paged, newest-first reads.
@@ -242,7 +244,7 @@ Transactional outbox — written in the same `SaveChangesAsync` as the triggerin
 
 ## Rules that aren't visible in the schema alone
 
-- **`Incidents.Status` has no public setter at the application layer** — it only changes through `Incident.TransitionTo(newStatus, actor, note)`, which also writes the matching `IncidentHistory` row in the same call. Never issue a raw `UPDATE Incidents SET Status = ...`.
+- **`Incidents.Status` has no public setter at the application layer** — it only changes through `Incident.TransitionTo(newStatus, actor, note, at, ...)`, which also writes the matching `IncidentHistory` row in the same call. Never issue a raw `UPDATE Incidents SET Status = ...`.
 - **`AppStatus` (Operational/Degraded/Outage) is not a column anywhere.** It's computed from open `Incidents` (severity + environment) by `AppStatusCalculator` and cached in Redis — there is intentionally no `Applications.Status` column to keep it from being set directly.
 - **`Fingerprint`** is computed by the app (not a DB computed column) from `ApplicationId` + a normalized `Title`, so the partial unique index can prevent duplicate *open* incidents for the same thing.
 - **Concurrency:** every mutable aggregate (`Incidents`, `Applications`, `Teams`) carries `RowVersion`; the API requires `If-Match` on writes and returns `409` on mismatch — don't drop `RowVersion` from a DTO just because a screen doesn't show it.

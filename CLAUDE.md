@@ -31,7 +31,8 @@ Reference only (NOT imported — read on demand when you need the original ratio
 
 ## Commands
 ```bash
-docker compose up -d                                  # SQL Server, Redis, Azurite (all with healthchecks)
+docker compose up -d                                  # SQL Server (+Full-Text, built from docker/mssql-fts on first run), Redis, Azurite (all with healthchecks)
+docker compose build mssql                            # rebuild the SQL Server + Full-Text image (integration tests also build/reuse it)
 docker compose --profile observability up -d          # + Aspire dashboard (traces/logs UI on :18888, OTLP on :4317)
 dotnet build
 dotnet test                                           # all tests (integration tests need Docker)
@@ -65,8 +66,8 @@ Domain → nothing. Application → Domain. Infrastructure → Application. Api/
 Never reference EF Core, ASP.NET or Infrastructure types from Domain or Application.
 
 ## Core domain rules (do not bypass)
-- **All status changes go through `Incident.TransitionTo(newStatus, actor, note)`.** Never set `Status`
-  directly. The state machine is the single source of truth:
+- **All status changes go through `Incident.TransitionTo(newStatus, actor, note, at, closeReason?, duplicateOfId?)`.**
+  Never set `Status` directly (`at` is passed in because Domain has no clock). The state machine is the single source of truth:
 
   | From | Allowed to | Who |
   |---|---|---|
@@ -77,6 +78,9 @@ Never reference EF Core, ASP.NET or Infrastructure types from Domain or Applicat
   | Resolved | Closed, Reopened | Reporter, Responder |
   | Reopened | InProgress | Responder |
 
+  "Responder" includes TeamLead and Admin; "Assignee" and "Reporter" are relations to the incident
+  (`AssigneeId`/`ReporterId` equal the actor), not roles. A move not in the table → 409; a listed move the actor may not
+  make → 403; a missing `note`/`closeReason`/`duplicateOfId` → 422.
 - Every change to an incident appends `IncidentHistory` rows (field, old, new, actor, time). History is append-only.
 - SLA due times (`AckDueAt`, `ResolveDueAt`) are computed by `SlaClock` on create and on severity change — never in controllers.
 - Application status is **derived**, never stored by users: open Critical in Production → Outage;

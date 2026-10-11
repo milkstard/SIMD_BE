@@ -1,3 +1,5 @@
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Images;
 using IncidentHub.Api.Auth;
 using IncidentHub.Application.Abstractions;
 using IncidentHub.Domain.Apps;
@@ -29,7 +31,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private static readonly Dictionary<UserRole, string> GroupIds = Enum.GetValues<UserRole>()
         .ToDictionary(r => r, _ => Guid.NewGuid().ToString());
 
-    private readonly MsSqlContainer _sql = new MsSqlBuilder().Build();
+    // SQL Server with Full-Text Search (docker/mssql-fts); the stock image cannot create the full-text index of migration AddIncidents.
+    private const string SqlImageName = "incidenthub/mssql-fts:2022";
+
+    private MsSqlContainer _sql = null!;
     private readonly RedisContainer _redis = new RedisBuilder().Build();
 
     public string TenantId { get; } = Guid.NewGuid().ToString();
@@ -42,6 +47,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        // Built once and then reused from the local Docker image cache (PullPolicy.Missing).
+        var sqlImage = new ImageFromDockerfileBuilder()
+            .WithName(SqlImageName)
+            .WithDockerfileDirectory(CommonDirectoryPath.GetSolutionDirectory(), "docker/mssql-fts")
+            .WithDockerfile("Dockerfile")
+            .WithImageBuildPolicy(PullPolicy.Missing)
+            .Build();
+        await sqlImage.CreateAsync();
+        _sql = new MsSqlBuilder().WithImage(sqlImage).Build();
+
         await Task.WhenAll(_sql.StartAsync(), _redis.StartAsync());
 
         // Forces the host to build, then applies the real migrations to the container database.
@@ -52,7 +67,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public new async Task DisposeAsync()
     {
         await base.DisposeAsync();
-        await _sql.DisposeAsync();
+        if (_sql is not null)
+        {
+            await _sql.DisposeAsync();
+        }
+
         await _redis.DisposeAsync();
     }
 
@@ -61,7 +80,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseEnvironment("Development");
 
         // UseSetting is visible to eager configuration reads in Program.cs, unlike ConfigureAppConfiguration.
-        builder.UseSetting("ConnectionStrings:Sql", _sql.GetConnectionString());
+        // Own database, not the default "master": SQL Server refuses full-text indexes in master/tempdb/model.
+        // MigrateAsync (InitializeAsync) creates it.
+        var appDatabase = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(_sql.GetConnectionString())
+        {
+            InitialCatalog = "incidenthub_tests",
+        };
+        builder.UseSetting("ConnectionStrings:Sql", appDatabase.ConnectionString);
         builder.UseSetting("ConnectionStrings:Redis", _redis.GetConnectionString());
         builder.UseSetting("AzureAd:TenantId", TenantId);
         builder.UseSetting("AzureAd:ClientId", ClientId);

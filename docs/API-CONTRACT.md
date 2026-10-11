@@ -406,12 +406,12 @@ Repeated `externalId` while an incident is open adds a comment instead of creati
 |---|---|---|
 | 400 | Malformed request, including a malformed `If-Match` or `Idempotency-Key` | Generic error toast |
 | 401 | Missing/expired token | MSAL silent refresh, then retry once |
-| 403 | Role or team not allowed | Toast; hide the action |
+| 403 | Role or team not allowed, including a status transition that exists but the caller may not make (`title` "Transition not permitted") | Toast; hide the action |
 | 404 | Not found or not visible to user | Not-found page |
-| 409 | Stale `If-Match` or invalid transition | Roll back optimistic update, refetch, toast |
+| 409 | Stale `If-Match`, a transition that is not in the workflow table for the current status, or an edit of a closed incident (`type` `.../invalid-transition`) | Roll back optimistic update, refetch, toast |
 | 413 | File too large | Field error on the dropzone |
 | 428 | Write sent without the required `If-Match` header | Client bug; send the ETag from the last read |
-| 422 | Validation failed; `errors` = `{ "title": ["Title is required."] }` | Map to form fields with `setError` |
+| 422 | Validation failed; `errors` = `{ "title": ["Title is required."] }`. Also a transition missing its `note`, `closeReason` or `duplicateOfId` | Map to form fields with `setError` |
 | 429 | Rate limited | Retry after `Retry-After` |
 | 500 | Unexpected | Toast showing `traceId` for support |
 
