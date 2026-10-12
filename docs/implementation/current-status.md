@@ -11,7 +11,7 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 | State | Done <!-- Planned · In progress · Blocked · Done --> |
 | Started | 2026-10-12 |
 | Last updated | 2026-10-12 |
-| Branch / commit | main / uncommitted |
+| Branch / commit | main / `7656473` |
 
 ### Progress
 - [x] Docs/tracking: spec status + decided open questions, deferred/completed items
@@ -30,7 +30,7 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 None. Decided 2026-10-12: unknown enum name stays 400; handler tests live in Api.IntegrationTests; `canEdit`/`canAssign` as proposed (OQ 7); rate limiting deferred (OQ 9).
 
 ### Review
-`/review-spec` on 2026-10-12 · change set: uncommitted on top of `057a417` (05_02).
+`/review-spec` on 2026-10-12 · change set: `7656473` (05_02).
 
 | Stage | Result | Key numbers |
 |---|---|---|
