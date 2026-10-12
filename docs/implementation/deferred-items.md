@@ -10,11 +10,10 @@ Rules:
 
 | Item | Source spec | Deferred to | Notes |
 |---|---|---|---|
-| Set `AckDueAt`/`ResolveDueAt` at creation using `SlaClock` (the clock and default policy are delivered by 05_01) | 04_01 | BE-05 (05_02) | Aggregate exposes `SetSlaDueTimes`; configurable `SlaPolicies` table is BE-12 |
 | Post-commit dispatch of domain events to SignalR | 04_01 | BE-09 | |
 | `Comment`/`Attachment` entities, tables and events (`CommentAdded`, `AttachmentAdded`) | 04_01, 04_02 | BE-08 | |
 | `AppStatusCalculator` | 04_01 | BE-11 | |
-| Team-membership resource check on incident endpoints | 04_01 | BE-05, BE-07 | `IAppTeamReader` already exists |
+| Team-membership resource check on incident endpoints (all but report) | 04_01 | BE-07 | `IAppTeamReader` already exists; report half delivered by 05_02 |
 | Full-text "similar incidents" query using the full-text index | 04_02 | BE-06 | Includes 50k-row seed for the p95 test |
 | List/detail queries using `IX_Incidents_Status_Severity` / `IX_Incidents_Application_CreatedAt` | 04_02 | BE-07 | |
 | `SlaPolicies` table | 04_02 | BE-12 | |
@@ -24,3 +23,4 @@ Rules:
 | Replace config-backed `ISlaPolicyProvider` (`Sla:Defaults`) with the `SlaPolicies` table | 05_01 | BE-12 | Callers already use the async provider |
 | Link `attachmentIds` on report (+ max 10 rule); non-empty list is `422` until then | 05_02 | BE-08 | |
 | Real `commentCount` and `attachments` in `IncidentDetail` (0 / `[]` until then) | 05_02 | BE-08 | |
+| Rate limiting on `POST /incidents` | 05_02 | Unassigned (cross-cutting security) | No BE item owns it yet |

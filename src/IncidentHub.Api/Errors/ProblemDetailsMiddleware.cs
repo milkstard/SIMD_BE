@@ -86,6 +86,17 @@ public sealed class ProblemDetailsMiddleware(
                 Detail = exception.Message,
             });
         }
+        catch (DuplicateIncidentException exception) when (exception.ExistingIncidentNumber is not null && !context.Response.HasStarted)
+        {
+            var details = new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Duplicate incident",
+                Detail = exception.Message,
+            };
+            details.Extensions["existingIncidentNumber"] = exception.ExistingIncidentNumber;
+            await WriteAsync(context, details);
+        }
         catch (ConflictException exception) when (!context.Response.HasStarted)
         {
             await WriteAsync(context, new ProblemDetails
@@ -93,6 +104,15 @@ public sealed class ProblemDetailsMiddleware(
                 Status = StatusCodes.Status409Conflict,
                 Title = "Conflict",
                 Detail = exception.Message,
+            });
+        }
+        catch (BadHttpRequestException exception) when (!context.Response.HasStarted)
+        {
+            // Raised by the server while the body is read, e.g. 413 when [RequestSizeLimit] is exceeded.
+            await WriteAsync(context, new ProblemDetails
+            {
+                Status = exception.StatusCode is >= 400 and < 500 ? exception.StatusCode : StatusCodes.Status400BadRequest,
+                Title = exception.StatusCode == StatusCodes.Status413PayloadTooLarge ? "Request body too large" : "Bad request",
             });
         }
         catch (DbUpdateConcurrencyException) when (!context.Response.HasStarted)

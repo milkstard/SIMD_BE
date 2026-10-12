@@ -40,6 +40,43 @@ public sealed class ProblemDetailsMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_DuplicateIncidentWithNumber_Returns409WithExistingNumber()
+    {
+        var (status, body) = await Run(new DuplicateIncidentException("INC-1042"));
+
+        status.Should().Be(StatusCodes.Status409Conflict);
+        body.GetProperty("title").GetString().Should().Be("Duplicate incident");
+        body.GetProperty("existingIncidentNumber").GetString().Should().Be("INC-1042");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_DuplicateIncidentWithoutNumber_Returns409WithoutExtension()
+    {
+        var (_, body) = await Run(new DuplicateIncidentException());
+
+        body.TryGetProperty("existingIncidentNumber", out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(StatusCodes.Status413PayloadTooLarge)]
+    [InlineData(StatusCodes.Status400BadRequest)]
+    public async Task InvokeAsync_BadHttpRequest_KeepsServerStatus(int statusCode)
+    {
+        var (status, _) = await Run(new BadHttpRequestException("body", statusCode));
+
+        status.Should().Be(statusCode);
+    }
+
+    [Fact]
+    public void Report_Action_HasRequestSizeLimit()
+    {
+        var method = typeof(IncidentHub.Api.Controllers.IncidentsController).GetMethod("Report")!;
+
+        method.GetCustomAttributes(typeof(Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute), inherit: false)
+            .Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task InvokeAsync_TransitionNotPermitted_Returns403()
     {
         var (status, _) = await Run(new TransitionNotPermittedException(IncidentStatus.New, IncidentStatus.Triaged));

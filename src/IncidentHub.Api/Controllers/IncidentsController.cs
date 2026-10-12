@@ -1,0 +1,49 @@
+using IncidentHub.Api.Auth;
+using IncidentHub.Api.Contracts;
+using IncidentHub.Api.Filters;
+using IncidentHub.Application.Incidents.Dtos;
+using IncidentHub.Application.Incidents.ReportIncident;
+using IncidentHub.Domain.Apps;
+using IncidentHub.Domain.Incidents;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace IncidentHub.Api.Controllers;
+
+[ApiController]
+[Route("api/v1/incidents")]
+public sealed class IncidentsController(ISender sender) : ControllerBase
+{
+    // Description (20k) + steps (5k) characters plus JSON overhead, with headroom for multi-byte text.
+    private const int MaxRequestBytes = 256 * 1024;
+
+    [HttpPost]
+    [Authorize(Policy = Policies.CanReportIncident)]
+    [Idempotent]
+    [RequestSizeLimit(MaxRequestBytes)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType<IncidentDetailDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<IncidentDetailDto>> Report(
+        [FromBody] ReportIncidentRequest request,
+        CancellationToken cancellationToken)
+    {
+        // A missing enum maps to an undefined value so the validator answers 422 on that field.
+        var incident = await sender.Send(
+            new ReportIncidentCommand(
+                request.ApplicationId ?? Guid.Empty,
+                request.Environment ?? (AppEnvironment)(-1),
+                request.Severity ?? (Severity)(-1),
+                request.Title ?? string.Empty,
+                request.Description ?? string.Empty,
+                request.StepsToReproduce,
+                request.AttachmentIds ?? []),
+            cancellationToken);
+        return Created($"/api/v1/incidents/{incident.Number}", incident);
+    }
+}

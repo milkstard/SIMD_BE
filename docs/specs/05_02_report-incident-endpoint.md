@@ -1,6 +1,6 @@
 # Spec 05_02: Report incident endpoint
 
-> Status: **Draft** · Source: BE-05 in docs/BACKEND-SPECS.md · Part 02 of 02
+> Status: **Implemented** · Source: BE-05 in docs/BACKEND-SPECS.md · Part 02 of 02
 
 ## 1. Purpose & scope
 
@@ -103,18 +103,18 @@ Regenerate `contracts/swagger.json` with `scripts/generate-openapi.ps1` (new pat
 
 ## 5. Acceptance criteria
 
-- [ ] Invalid payload (missing/short title, unknown enum, oversized description, non-empty `attachmentIds`) → `422` with camelCase field keys in `ProblemDetails.errors`; malformed JSON → `400`.
-- [ ] Valid request → `201`, `Location: /api/v1/incidents/INC-{n}`, `ETag` equal to `"<rowVersion>"`, body is an `IncidentDetail` with `status = New`, `source = Manual`, the caller as `reporter`, `allowedTransitions` per the workflow table for the caller.
-- [ ] `AckDueAt`/`ResolveDueAt` are non-null and equal `createdAt + policy minutes` for the incident's severity in the 201 body and in the database.
-- [ ] Incident row, one `Status: null → New` history row and one `IncidentReported` outbox row are written by one `SaveChangesAsync` (end-to-end check; the rollback proof is in 05_01).
-- [ ] Two requests with the same `Idempotency-Key` and body (sequential, and concurrent) produce exactly one incident; the repeat gets the original `201` body and `Location`.
-- [ ] Same `Idempotency-Key` with a different body → `422`, no new incident.
-- [ ] A `<script>` / `onerror=` payload in `description` or `stepsToReproduce` is stripped before storage; description that is empty after sanitizing → `422`.
-- [ ] Caller not on the application's team (Admin included), unknown or inactive application → `422` on `applicationId`, identical message, no row written.
-- [ ] Environment not in the application's `Environments` → `422` on `environment`.
-- [ ] Second open incident with the same app + normalized title → `409` with `existingIncidentNumber`; after the first is closed, reporting succeeds.
-- [ ] No token → `401`; token without a role → `403`.
-- [ ] Controller has no logic beyond mapping; no `DateTime.UtcNow`; `API-CONTRACT.md` and `swagger.json` updated; build + `dotnet format` clean.
+- [x] Invalid payload (missing/short title, undefined enum value, oversized description, non-empty `attachmentIds`) → `422` with camelCase field keys in `ProblemDetails.errors`; malformed JSON or an unknown enum name → `400`.
+- [x] Valid request → `201`, `Location: /api/v1/incidents/INC-{n}`, `ETag` equal to `"<rowVersion>"`, body is an `IncidentDetail` with `status = New`, `source = Manual`, the caller as `reporter`, `allowedTransitions` per the workflow table for the caller.
+- [x] `AckDueAt`/`ResolveDueAt` are non-null and equal `createdAt + policy minutes` for the incident's severity in the 201 body and in the database.
+- [x] Incident row, one `Status: null → New` history row and one `IncidentReported` outbox row are written by one `SaveChangesAsync` (end-to-end check; the rollback proof is in 05_01).
+- [x] Two requests with the same `Idempotency-Key` and body (sequential, and concurrent) produce exactly one incident; the repeat gets the original `201` body and `Location`.
+- [x] Same `Idempotency-Key` with a different body → `422`, no new incident.
+- [x] A `<script>` / `onerror=` payload in `description` or `stepsToReproduce` is stripped before storage; description that is empty after sanitizing → `422`.
+- [x] Caller not on the application's team (Admin included), unknown or inactive application → `422` on `applicationId`, identical message, no row written.
+- [x] Environment not in the application's `Environments` → `422` on `environment`.
+- [x] Second open incident with the same app + normalized title → `409` with `existingIncidentNumber`; after the first is closed, reporting succeeds.
+- [x] No token → `401`; token without a role → `403`.
+- [x] Controller has no logic beyond mapping; no `DateTime.UtcNow`; `API-CONTRACT.md` and `swagger.json` updated; build + `dotnet format` clean.
 
 ## 6. Test plan
 
@@ -163,9 +163,10 @@ Decided with the user on 2026-10-12:
 
 (OQ 1–2 are in 05_01.)
 
-Still open (confirm during implementation):
+Decided during implementation (2026-10-12):
 
-7. No doc defines `canEdit`/`canAssign`. Proposed: `canAssign` = Responder/TeamLead/Admin and not Closed (matches `CanAssignIncident`); `canEdit` = same roles, or the reporter, while not Closed. BE-07 owns the PATCH rules and may refine this.
-8. CLAUDE.md asks for 400/422 on validation; the existing middleware returns 422 for all `ValidationException`s and 400 only for malformed JSON/headers. This spec keeps that split.
-9. Cross-cutting "Rate limiting on `POST /incidents`" (BACKEND-SPECS → Security) is not owned by any BE item. Not deferred here; decide whether it joins this part or gets its own item.
-10. BE-05 says "400/422 with field-level errors"; API-CONTRACT §6 has 413 only for files, so an oversized JSON body is treated as 422 (length rules), not 413.
+7. `canAssign` = Responder/TeamLead/Admin and not Closed (matches `CanAssignIncident`); `canEdit` = the same roles, or the reporter, while not Closed. BE-07 owns the PATCH rules and may refine this.
+8. CLAUDE.md asks for 400/422 on validation; the existing middleware returns 422 for all `ValidationException`s and 400 only for malformed JSON/headers. This spec keeps that split. An unknown enum *name* fails JSON binding → 400 (as for Applications); an undefined numeric value reaches the validator → 422.
+9. Rate limiting on `POST /incidents` is not built here; tracked in `deferred-items.md` as a cross-cutting security item.
+10. Length rules (title, description, steps) give 422. A request body above the endpoint limit (256 KiB on `POST /incidents`; 1 MiB default for other `[Idempotent]` endpoints) is rejected with 413 before it is read, via `[RequestSizeLimit]` and the idempotency filter enforcing the same limit. API-CONTRACT §1/§6 updated. The idempotency hash covers the raw bytes, so a retry must resend a byte-identical body.
+11. DB-backed `ReportIncidentHandlerTests` live in `tests/IncidentHub.Api.IntegrationTests` (real SQL container via `ApiFactory`); `Application.UnitTests` has no Infrastructure reference.

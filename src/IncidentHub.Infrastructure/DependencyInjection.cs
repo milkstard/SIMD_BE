@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IAppTeamReader, RedisAppTeamReader>();
         services.AddScoped<IIdempotencyStore, RedisIdempotencyStore>();
         services.AddScoped<IUserDirectory, UserDirectory>();
+        services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
         services.AddSlaPolicies(configuration);
 
         return services;

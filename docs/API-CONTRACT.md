@@ -24,7 +24,7 @@ breaking change and needs `/api/v2` or a coordinated release of both sides.
 | Nulls | Optional fields are present with `null`, not omitted |
 | Paging | Cursor-based: request `cursor`, `limit` (default 25, max 100); response `Paged<T>` |
 | Concurrency | Incident responses include `rowVersion` (base64) and an `ETag` header. Writes send `If-Match: "<rowVersion>"` |
-| Idempotency | `POST` create endpoints accept `Idempotency-Key: <uuid>`; repeated key returns the original result |
+| Idempotency | `POST` create endpoints accept `Idempotency-Key: <uuid>`; repeated key with a byte-identical body returns the original result, with a different body `422` |
 | Errors | RFC 7807 `ProblemDetails` (`application/problem+json`) — see section 6 |
 | Rich text | `description` and comment `body` are sanitized HTML; the server strips scripts and unsafe attributes |
 
@@ -241,7 +241,7 @@ public sealed record TransitionRequest(
 
 | Method | Path | Body | Success | Notes |
 |---|---|---|---|---|
-| POST | `/incidents` | `ReportIncidentRequest` | `201` `IncidentDetail`, `Location` header | `Idempotency-Key` |
+| POST | `/incidents` | `ReportIncidentRequest` | `201` `IncidentDetail`, `Location` header, `ETag` | `Idempotency-Key`. Caller must belong to the application's owning team (Admin included), otherwise `422` on `applicationId`; `attachmentIds` must be empty until BE-08 (`422`) |
 | GET | `/incidents` | — | `200` `Paged<IncidentSummary>` | Query below |
 | GET | `/incidents/{number}` | — | `200` `IncidentDetail` + `ETag` | |
 | PATCH | `/incidents/{id}` | `UpdateIncidentRequest` | `200` `IncidentDetail` | `If-Match` required |
@@ -408,10 +408,10 @@ Repeated `externalId` while an incident is open adds a comment instead of creati
 | 401 | Missing/expired token | MSAL silent refresh, then retry once |
 | 403 | Role or team not allowed, including a status transition that exists but the caller may not make (`title` "Transition not permitted") | Toast; hide the action |
 | 404 | Not found or not visible to user | Not-found page |
-| 409 | Stale `If-Match`, a transition that is not in the workflow table for the current status, or an edit of a closed incident (`type` `.../invalid-transition`) | Roll back optimistic update, refetch, toast |
-| 413 | File too large | Field error on the dropzone |
+| 409 | Stale `If-Match`, a transition that is not in the workflow table for the current status, or an edit of a closed incident (`type` `.../invalid-transition`). Reporting a duplicate open incident (same application + normalized title) returns `title` "Duplicate incident" with an `existingIncidentNumber` extension (`"INC-1042"`) | Roll back optimistic update, refetch, toast |
+| 413 | File too large; or a request body above the endpoint limit (256 KiB on `POST /incidents`, 1 MiB default for other `Idempotency-Key` endpoints) | Field error on the dropzone / generic error toast |
 | 428 | Write sent without the required `If-Match` header | Client bug; send the ETag from the last read |
-| 422 | Validation failed; `errors` = `{ "title": ["Title is required."] }`. Also a transition missing its `note`, `closeReason` or `duplicateOfId` | Map to form fields with `setError` |
+| 422 | Validation failed; `errors` = `{ "title": ["Title is required."] }`. Also a transition missing its `note`, `closeReason` or `duplicateOfId`, and an `Idempotency-Key` reused with a different request body | Map to form fields with `setError` |
 | 429 | Rate limited | Retry after `Retry-After` |
 | 500 | Unexpected | Toast showing `traceId` for support |
 
