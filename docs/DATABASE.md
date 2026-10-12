@@ -238,7 +238,7 @@ Transactional outbox — written in the same `SaveChangesAsync` as the triggerin
 | `Attempts` | `int` | not null, default `0` |
 | `Error` | `nvarchar(max)` | nullable — last failure message |
 
-**Indexes:** filtered index on `ProcessedAt WHERE ProcessedAt IS NULL` — dispatcher poll query uses `UPDLOCK, READPAST` against this.
+**Indexes:** `IX_OutboxMessages_Unprocessed` on `ProcessedAt` `INCLUDE (OccurredAt)` `WHERE ProcessedAt IS NULL` — dispatcher poll query uses `UPDLOCK, READPAST` against this and orders by `OccurredAt`.
 
 ---
 

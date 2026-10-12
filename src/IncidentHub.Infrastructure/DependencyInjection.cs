@@ -2,6 +2,7 @@ using IncidentHub.Application.Abstractions;
 using IncidentHub.Infrastructure.Caching;
 using IncidentHub.Infrastructure.Persistence;
 using IncidentHub.Infrastructure.Security;
+using IncidentHub.Infrastructure.Sla;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IAppTeamReader, RedisAppTeamReader>();
         services.AddScoped<IIdempotencyStore, RedisIdempotencyStore>();
         services.AddScoped<IUserDirectory, UserDirectory>();
+        services.AddSlaPolicies(configuration);
 
         return services;
     }

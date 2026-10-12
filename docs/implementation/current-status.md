@@ -7,42 +7,48 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
-| Spec | `docs/specs/04_02_incident-persistence-and-migration.md` (BE-04, part 2 of 2) |
+| Spec | `docs/specs/05_01_sla-clock-and-outbox.md` (BE-05, part 1 of 2) |
 | State | Done <!-- Planned · In progress · Blocked · Done --> |
-| Started | 2026-10-11 |
-| Last updated | 2026-10-11 |
+| Started | 2026-10-12 |
+| Last updated | 2026-10-12 |
 | Branch / commit | main / uncommitted |
 
 ### Progress
-- [x] Application: `ConflictException` unsealed, `DuplicateIncidentException`, `IAppDbContext` DbSets
-- [x] Infrastructure: `Sequences`, `IncidentConfiguration`, `IncidentHistoryConfiguration`, `AppDbContext` (fingerprint mapping, append-only guard)
-- [x] Migration `AddIncidents` (sequence, tables, indexes, full-text catalog + index, `Down`)
-- [x] Ops: `docker/mssql-fts/Dockerfile`, docker-compose `mssql` service, `ApiFactory` builds the image and uses its own database
-- [x] Tests: `IncidentPersistenceTests` (13 integration tests), `InvokeAsync_DuplicateIncident_Returns409` (unit)
-- [x] Docs: spec 04_02 open questions resolved, DATABASE.md, CLAUDE.md commands
+- [x] Domain: `SlaPolicy`, `SlaClock`, `SlaDueTimes`
+- [x] Application: `Microsoft.Extensions.Options` package, `ISlaPolicyProvider`, `SlaDefaultsOptions`, `SlaDefaultsOptionsValidator`
+- [x] Infrastructure: `OutboxMessage`, `OutboxJson`, `OutboxMessageConfiguration`, `AppDbContext` outbox staging, `ConfiguredSlaPolicyProvider`, DI
+- [x] Migration `AddOutboxMessages`
+- [x] Config: `Sla:Defaults` in Api and Worker appsettings
+- [x] Tests: Domain, Application, Api unit, `OutboxPersistenceTests` (integration)
+- [x] Docs: DATABASE.md index, deferred/completed items, spec status
 
 ### Verification
 - `dotnet build` (whole solution, warnings as errors): 0 warnings, 0 errors.
-- `dotnet test` (all, Docker up): Domain 290, Application 53, Api.UnitTests 42, Api.IntegrationTests 140 passed, 0 failed (13 are the new `IncidentPersistenceTests`).
-- `dotnet format --verify-no-changes`: clean (exit 0).
-- `docker compose build mssql` succeeded (first build ~3 min); `docker compose up -d --wait mssql` healthy, `SERVERPROPERTY('IsFullTextInstalled')` = 1.
-- Found by the first integration run and fixed: the factory migrated into `master`, where SQL Server refuses full-text indexes, so `ApiFactory` now uses its own database `incidenthub_tests`. Two test-only bugs fixed (index query with two ordered aggregates; history ordering tie on equal timestamps).
+- `dotnet test` (all, Docker up): Domain 306, Application 59, Api.UnitTests 46, Api.IntegrationTests 150 passed, 0 failed (10 are the new `OutboxPersistenceTests`; 25 new unit tests).
+- `dotnet format --verify-no-changes`: clean (the generated migration was formatted with `dotnet format`).
+- `docker compose build mssql` cached; integration run used Testcontainers SQL Server (FTS image) + Redis.
 
 ### Blockers / open questions
-None.
+None. OQ 3 (outbox index `INCLUDE (OccurredAt)`) decided: add it.
 
 ### Review
-`/review-spec` on 2026-10-11 · change set commit `c0d9f45` (04_02 part).
+`/review-spec` on 2026-10-12 · change set: uncommitted on top of `72b76d6` (05_01).
 
 | Stage | Result | Key numbers |
 |---|---|---|
-| QA | Passed | 525 passed / 0 failed / 0 not run; 11/11 AC met; 3 Medium + 5 Low; proposed tests 3 |
-| Security | Passed | 0 Critical / 0 High / 0 Medium / 4 Low (plus pre-existing MessagePack 2.5.108 High advisories in `IncidentHub.Api`, not introduced by 04_02) |
-| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 3 Low |
+| QA | Passed | 561 passed / 0 failed / 0 not run; 9/9 AC met; 0 Critical/High/Medium, 2 Low; proposed tests 0 |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low (plus pre-existing MessagePack 2.5.108 and test-only SSH.NET advisories, not introduced by 05_01) |
+| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 4 Low |
 
 Verdict: **Approved**.
 
+Follow-up (2026-10-12, after review): code review M1, L1, L2, L4 fixed; L3 kept by decision (OQ 5). Rebuilt, `dotnet format` clean, full suite re-run: Domain 306, Application 64, Api.UnitTests 49, Api.IntegrationTests 152 passed, 0 failed.
+
 ## Log
+- 2026-10-12 · 05_01 · Fixed · Code review follow-ups: shared sync/async save logic (sync path now translates unique violations), shared escalate-percent constants, provider uses `IOptions`, event-name tests; 571 tests green.
+- 2026-10-12 · 05_01 · Reviewed · Approved — QA 561/561, security 2 Low, code review 1 Medium (sync `SaveChanges` duplicates the async path and does not translate unique violations).
+- 2026-10-12 · 05_01 · Done · SlaClock, config-backed SLA defaults, outbox table and same-save event staging, `AddOutboxMessages` migration; full suite green with Docker.
+- 2026-10-12 · 05_01 · In progress · Started; pulls in SlaClock/default SLA and OutboxMessage/events-to-outbox from deferred items.
 - 2026-10-11 · 04_02 · Reviewed · Approved — QA 525/525, security 4 Low, code review 1 Medium (migration half-applies if Full-Text is missing).
 - 2026-10-11 · 04_02 · Done · Persistence, `AddIncidents` migration (with full-text), FTS image and tests; full suite green with Docker.
 - 2026-10-11 · 04_02 · Blocked · Code complete; integration run waited for Docker.
