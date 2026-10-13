@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Testcontainers.Azurite;
 using Testcontainers.MsSql;
 using Testcontainers.Redis;
 
@@ -37,6 +38,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private MsSqlContainer _sql = null!;
     private readonly RedisContainer _redis = new RedisBuilder().Build();
 
+    // Same image as docker-compose. The SDK can be newer than this Azurite, hence the version check is skipped.
+    private readonly AzuriteContainer _azurite = new AzuriteBuilder()
+        .WithImage("mcr.microsoft.com/azure-storage/azurite:3.37.0")
+        .WithCommand("--skipApiVersionCheck")
+        .Build();
+
+    /// <summary>Connection string of the Azurite container backing attachment storage.</summary>
+    public string BlobConnectionString => _azurite.GetConnectionString();
+
     public string TenantId { get; } = Guid.NewGuid().ToString();
 
     public string ClientId { get; } = Guid.NewGuid().ToString();
@@ -57,7 +67,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await sqlImage.CreateAsync();
         _sql = new MsSqlBuilder().WithImage(sqlImage).Build();
 
-        await Task.WhenAll(_sql.StartAsync(), _redis.StartAsync());
+        await Task.WhenAll(_sql.StartAsync(), _redis.StartAsync(), _azurite.StartAsync());
 
         // Forces the host to build, then applies the real migrations to the container database.
         using var scope = Services.CreateScope();
@@ -73,6 +83,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         }
 
         await _redis.DisposeAsync();
+        await _azurite.DisposeAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -88,6 +99,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         };
         builder.UseSetting("ConnectionStrings:Sql", appDatabase.ConnectionString);
         builder.UseSetting("ConnectionStrings:Redis", _redis.GetConnectionString());
+        builder.UseSetting("Storage:Blob:ConnectionString", _azurite.GetConnectionString());
         builder.UseSetting("AzureAd:TenantId", TenantId);
         builder.UseSetting("AzureAd:ClientId", ClientId);
         foreach (var (role, groupId) in GroupIds)

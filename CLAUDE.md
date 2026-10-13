@@ -52,7 +52,7 @@ After changing any endpoint or DTO, regenerate the OpenAPI spec (`swagger.json` 
 Run `scripts/generate-openapi.ps1` (uses fixed placeholder config so the output is stable).
 
 Local config (user-secrets, never committed): `AzureAd:TenantId`, `AzureAd:ClientId`, `Authorization:GroupRoleMap:<group-id>` = role,
-`ConnectionStrings:Sql`, `ConnectionStrings:Redis`. Optional: `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://localhost:4317`)
+`ConnectionStrings:Sql`, `ConnectionStrings:Redis`, `Storage:Blob:ConnectionString` (Azurite: `UseDevelopmentStorage=true`) or `Storage:Blob:AccountUri` (Azure, managed identity). Optional: `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://localhost:4317`)
 enables OTLP export of traces, metrics and Serilog logs; without it, logs go to the console only. The API refuses to start without the Entra settings. See `docs/specs/entra-id-authorization.md`.
 
 ## Solution layout (Clean Architecture — respect the dependency direction)

@@ -74,6 +74,69 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                     b.ToTable("Applications", (string)null);
                 });
 
+            modelBuilder.Entity("IncidentHub.Domain.Incidents.Attachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BlobPath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("CommentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("IncidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ScanAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("ScanStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("UploadedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CommentId");
+
+                    b.HasIndex("IncidentId")
+                        .HasDatabaseName("IX_Attachments_IncidentId");
+
+                    b.HasIndex("ScanAttempts", "CreatedAt")
+                        .HasDatabaseName("IX_Attachments_Pending")
+                        .HasFilter("[ScanStatus] = 'Pending'");
+
+                    b.HasIndex("UploadedById", "CreatedAt")
+                        .HasDatabaseName("IX_Attachments_Unlinked")
+                        .HasFilter("[IncidentId] IS NULL");
+
+                    b.ToTable("Attachments", (string)null);
+                });
+
             modelBuilder.Entity("IncidentHub.Domain.Incidents.Comment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -422,6 +485,25 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                     b.HasOne("IncidentHub.Domain.Teams.Team", null)
                         .WithMany()
                         .HasForeignKey("OwningTeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IncidentHub.Domain.Incidents.Attachment", b =>
+                {
+                    b.HasOne("IncidentHub.Domain.Incidents.Comment", null)
+                        .WithMany()
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IncidentHub.Domain.Incidents.Incident", null)
+                        .WithMany()
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IncidentHub.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedById")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -41,6 +41,7 @@ public static class SwaggerSetup
             });
             options.OperationFilter<AuthResponsesOperationFilter>();
             options.OperationFilter<RequestHeadersOperationFilter>();
+            options.OperationFilter<MultipartUploadOperationFilter>();
         });
 
         return services;
@@ -125,5 +126,34 @@ public sealed class RequestHeadersOperationFilter : IOperationFilter
                 Schema = new OpenApiSchema { Type = "string", Format = "uuid" },
             });
         }
+    }
+}
+
+/// <summary>Describes the body of an action that reads multipart itself (<see cref="DisableFormValueModelBindingAttribute"/>): one binary <c>file</c>.</summary>
+public sealed class MultipartUploadOperationFilter : IOperationFilter
+{
+    public void Apply(OpenApiOperation operation, OperationFilterContext context)
+    {
+        if (!context.MethodInfo.GetCustomAttributes(true).OfType<DisableFormValueModelBindingAttribute>().Any())
+        {
+            return;
+        }
+
+        operation.RequestBody = new OpenApiRequestBody
+        {
+            Required = true,
+            Content =
+            {
+                ["multipart/form-data"] = new OpenApiMediaType
+                {
+                    Schema = new OpenApiSchema
+                    {
+                        Type = "object",
+                        Required = new HashSet<string> { MultipartFileReader.FieldName },
+                        Properties = { [MultipartFileReader.FieldName] = new OpenApiSchema { Type = "string", Format = "binary" } },
+                    },
+                },
+            },
+        };
     }
 }

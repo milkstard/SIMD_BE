@@ -11,7 +11,8 @@ Rules:
 | Item | Source spec | Deferred to | Notes |
 |---|---|---|---|
 | Post-commit dispatch of domain events to SignalR | 04_01 | BE-09 (09_02) | Hook sits in `AppDbContext.OnSaved` |
-| `Attachment` entity, table and `AttachmentAdded` event | 04_01, 04_02 | BE-08 (08_02 entity and table, 08_03 `AttachmentAdded`) | The Comment half and `CommentAdded` were delivered by 08_01 |
+| `AttachmentAdded` event | 04_01, 04_02 | BE-08 (08_03) | Entity and table were delivered by 08_02, the Comment half and `CommentAdded` by 08_01 |
+| Orphan sweeper for unlinked uploads after a TTL | 08_02 | BE-08 (08_03) / ops | Unlinked attachments (`IncidentId IS NULL`) are kept until then; filtered index `IX_Attachments_Unlinked` supports it |
 | `AppStatusCalculator` | 04_01 | BE-11 | |
 | `SlaPolicies` table | 04_02 | BE-12 | |
 | `Notifications` table | 04_02 | BE-14 | |

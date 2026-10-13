@@ -268,8 +268,10 @@ Notes: `teamId` filters the **assigned** team. `q` is a full-text search over ti
 
 | Method | Path | Body | Success | Notes |
 |---|---|---|---|---|
-| POST | `/attachments` | `multipart/form-data` field `file` | `201` `Attachment` | ≤ 25 MB; images, `.log`, `.txt`, `.json`; starts `scanStatus: Pending` |
-| GET | `/attachments/{id}/download` | — | `302` to SAS URL (5 min) | `409` if not `Clean` |
+| POST | `/attachments` | `multipart/form-data`, exactly one part named `file` | `201` `Attachment`, `Location` (the download URL, which answers `409` until the scan marks the file `Clean`) | Any signed-in role. Starts `scanStatus: Pending`; the file is not downloadable until the scan marks it `Clean`. `400` when the body is not multipart, has no `file` part or has a second part; `413` over 25 MB (checked while streaming; the request body is capped at 26 MiB); `422` on `file` for a type that is not allowed, a content type that does not match the extension or the file's leading bytes, or an empty file. `BlobPath` never appears in a response |
+| GET | `/attachments/{id}/download` | — | `302` to a read-only SAS URL that expires 5 minutes after issue; `Cache-Control: no-store` | `404` when unknown or not visible to the caller (an unlinked upload belongs to its uploader only; a linked one needs membership of the incident's team; an attachment of an internal comment is `404` for Reporters) — checked before the status, so a caller who may not see the file never learns it. `409` (title "Attachment not available", detail names the status) unless `Clean`. The API never streams the file; the link serves it as `Content-Disposition: attachment` (`application/octet-stream` for anything but images) |
+
+Allowed files (extension and content type must agree; SVG and PDF are not allowed): `.png` `image/png`, `.jpg`/`.jpeg` `image/jpeg`, `.gif` `image/gif`, `.webp` `image/webp`, `.txt` and `.log` `text/plain`, `.json` `application/json`. Images must start with the magic number of their type. The file name is reduced to its last path segment (control characters and quotes removed, 300 characters at most). Linking attachments to a report or comment (`attachmentIds`) arrives with BE-08 part 3; until then `attachments` in `IncidentDetail` and `Comment` is `[]`.
 
 ### Dashboard and reports
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using FluentValidation;
+using IncidentHub.Application.Attachments;
 using IncidentHub.Application.Common.Exceptions;
 using IncidentHub.Domain.Incidents;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +10,7 @@ namespace IncidentHub.Api.Errors;
 
 /// <summary>
 /// Maps exceptions to RFC 7807 responses with a <c>traceId</c>: validation to 422, not found to 404,
-/// conflict or stale write to 409, anything else to 500.
+/// conflict, stale write or an attachment that is not scanned clean to 409, an oversized upload to 413, anything else to 500.
 /// </summary>
 public sealed class ProblemDetailsMiddleware(
     RequestDelegate next,
@@ -105,6 +106,24 @@ public sealed class ProblemDetailsMiddleware(
             };
             details.Extensions["existingIncidentNumber"] = exception.ExistingIncidentNumber;
             await WriteAsync(context, details);
+        }
+        catch (AttachmentNotReadyException exception) when (!context.Response.HasStarted)
+        {
+            await WriteAsync(context, new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Attachment not available",
+                Detail = exception.Message,
+            });
+        }
+        catch (PayloadTooLargeException exception) when (!context.Response.HasStarted)
+        {
+            await WriteAsync(context, new ProblemDetails
+            {
+                Status = StatusCodes.Status413PayloadTooLarge,
+                Title = "Request body too large",
+                Detail = exception.Message,
+            });
         }
         catch (ConflictException exception) when (!context.Response.HasStarted)
         {

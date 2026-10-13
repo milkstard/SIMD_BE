@@ -167,16 +167,20 @@ Append-only audit trail. Never updated or deleted.
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | `uniqueidentifier` | PK |
-| `IncidentId` | `uniqueidentifier` | FK → `Incidents.Id`, not null |
+| `IncidentId` | `uniqueidentifier` | FK → `Incidents.Id`, **nullable** — null from the upload (`POST /attachments`) until a report or comment links it (BE-08 part 3) |
+| `CommentId` | `uniqueidentifier` | FK → `Comments.Id`, nullable — set when the attachment is linked to a comment |
 | `UploadedById` | `uniqueidentifier` | FK → `Users.Id`, not null |
 | `FileName` | `nvarchar(300)` | not null |
 | `ContentType` | `nvarchar(100)` | not null |
 | `SizeBytes` | `bigint` | not null, ≤ 25 MB enforced in app layer |
 | `BlobPath` | `nvarchar(500)` | not null — path in Blob Storage, never exposed directly |
 | `ScanStatus` | `nvarchar(20)` | `Pending` \| `Clean` \| `Infected` |
+| `ScanAttempts` | `int` | not null, default `0` — failed scan attempts while `Pending`; the scan job claims the fewest first |
 | `CreatedAt` | `datetimeoffset` | not null |
 
-**Indexes:** `(IncidentId)`.
+**Indexes:** `IX_Attachments_IncidentId` on `(IncidentId)`; `IX_Attachments_CommentId` on `(CommentId)`; filtered `IX_Attachments_Unlinked` on `(UploadedById, CreatedAt) WHERE IncidentId IS NULL` (orphan cleanup); filtered `IX_Attachments_Pending` on `(ScanAttempts, CreatedAt) WHERE ScanStatus = 'Pending'` (the scan job's claim query and its stuck-attachment check).
+
+Visibility: an unlinked attachment is visible to its uploader only; a linked one to the members of the incident's application team (an attachment of an internal comment not to Reporters).
 
 ---
 

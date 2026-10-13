@@ -7,29 +7,43 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
-| Spec | `docs/specs/09_01_hub-groups-and-access.md` (BE-09, part 1 of 2) |
+| Spec | `docs/specs/08_02_attachment-storage-and-download.md` (BE-08, part 2 of 3) |
 | State | Done <!-- Planned · In progress · Blocked · Done --> |
 | Started | 2026-10-13 |
 | Last updated | 2026-10-13 |
-| Branch / commit | main / `24d65aa` (07_03 and 08_01 work is still uncommitted in the tree) |
+| Branch / commit | main / `852e761` |
 
 ### Progress
-- [x] Docs/tracking: spec decisions (09_01 §8, `GetOwningTeamIdAsync` moved to 09_02)
-- [x] Application: `IAppTeamReader.GetTeamIdsForUserAsync`, `CanWatchIncident` query/validator/handler, hub payload DTOs (`AppStatusItemDto`, `DashboardSummaryDto`, `NotificationDto`, `CommentAddedEvent`) and `AppStatus`/`NotificationType` enums
-- [x] Infrastructure: `RedisAppTeamReader.GetTeamIdsForUserAsync`
-- [x] Api: `IIncidentClient` (6 methods), `HubGroups`, `IncidentsHub` rewrite, hub JSON protocol with string enums
-- [x] API-CONTRACT.md §7
-- [x] Tests written: `IncidentsHubTests` (replaces `IncidentsHubAuthTests`), probe rewrite, `CanWatchIncidentHandlerTests`, `GetTeamIdsForUserAsync_ReturnsOnlyOwnTeams`, validator and client-contract unit tests
-- [x] Integration run with Docker
+- [x] Docs/tracking: spec decisions (08_02 §8), deferred/completed items
+- [x] Domain: `ScanStatus`, `Attachment`, `AttachmentRules`
+- [x] Application: `IFileStore`, `IAttachmentScanner`, `IDistributedLock`, `UploadAttachment`, `GetAttachmentDownload`, exceptions
+- [x] Infrastructure: `AttachmentConfiguration` + `AddAttachments` migration, `AzureBlobFileStore`, container initializer, stub scanner, `RedisDistributedLock`, `AttachmentScanRunner`
+- [x] Api: `AttachmentsController`, multipart reader, problem mappings, swagger
+- [x] Worker: `AttachmentScanJob`
+- [x] API-CONTRACT.md, DATABASE.md, CLAUDE.md config line, `contracts/swagger.json`
+- [x] Tests (unit + integration with Azurite)
 
 ### Verification
 - `dotnet build` (whole solution): 0 warnings, 0 errors.
-- Unit tests (`Category!=Integration`): Domain 369, Application 169, Api.UnitTests 75 passed, 0 failed.
-- Full suite with Docker (`Category!=Performance`): 397 of 399 integration tests pass, including all new hub tests (`IncidentsHubTests`, `CanWatchIncidentHandlerTests`, `GetTeamIdsForUserAsync_ReturnsOnlyOwnTeams`). Two failures belong to the uncommitted 08_01 work, not 09_01: `CommentTests.Add_BodyOverRequestCap_Returns413` (gets 422) and `FindSimilarIncidentsHandlerTests.Handle_Matches_ReturnsSummariesInRankOrder` (NullReferenceException in `IncidentWorkflow.IsResponder`: the test's substitute `ICurrentUser` returns null `Roles` since the handler now checks the responder role).
-- `dotnet format --verify-no-changes` reports CHARSET/IDE0161 only in `Migrations/20261013081549_AddComments.cs` (08_01 work, not this spec); the 09_01 files are clean.
+- `dotnet test --filter Category!=Performance` with Docker: Domain 438, Application 189, Api.UnitTests 75, Api.IntegrationTests 452 passed, 0 failed (52 are new attachment tests: upload, download, scan job, storage contract against Azurite, Redis lock).
+- `dotnet format --verify-no-changes` clean; `contracts/swagger.json` regenerated (new `/attachments` operations, multipart body).
+- Not run: the manual smoke test with the real Worker process (the scan job is covered through `AttachmentScanRunner`).
+- Deviations from the spec: non-multipart body is `400` (no `[Consumes]`, which would give `415`); `AttachmentScanRunner`, scanner and lock are registered by `AddInfrastructure` (the tests resolve them from the API host) instead of a separate `AddAttachmentScanning`; blob retries use the Azure SDK policy, not Polly.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1154/1154 passed (Domain 438, Application 189, Api.UnitTests 75, integration 452), 0 proposed tests required, 3 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 3 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 5 Low |
+
+Verdict: **Approved**. Fixed after the review: M1 (new `Attachments.ScanAttempts`; the claim orders by attempts then age, so unreadable files sink behind new uploads; test `Scan_RowsThatKeepFailing_DoNotStarveNewerUploads`, which fails without the fix) and L3 (once per pass the oldest `Pending` row is checked and a warning logged when it is over 1 hour old, whatever the cause; two tests). The `AddAttachments` migration was regenerated (never applied or committed). Full suite re-run green (1161 tests), build 0 warnings, format clean, swagger unchanged. Also fixed afterwards: SEC-1 (SAS is HTTPS-only except on the plain-HTTP emulator), SEC-2 (format/bidi/zero-width characters and line separators stripped from file names), SEC-3 (the scan pass stops starting files after a 30 s budget, so it ends before the 60 s lock expires), L1 (a failing container creation at start-up is logged, the host keeps running), L2 (`InvariantCulture` in the blob path), L4 (the `Location` 409-until-Clean behaviour is documented in API-CONTRACT), L5 (a failed lock release is logged as a warning, not a failed pass). The 1-hour warning test and the 'no FileResult' guard (302 asserted by the endpoint tests) were already covered; no Application-level `GetAttachmentDownloadHandlerTests` because the handler is an EF projection (covered by the endpoint tests). New tests: bidi/zero-width file names, spent scan budget. Full suite 1163 green, build 0 warnings, format clean. Pre-existing dependency advisories (MessagePack, SSH.NET) are tracked under 08_01 SEC-2.
 
 ### Blockers / open questions
-None. Decided 2026-10-13: `dashboard:{teamId}` + `team:{teamId}` groups; stale membership accepted until reconnect; responder groups follow the token role; `GetOwningTeamIdAsync` moves to 09_02.
+None. Decided 2026-10-13: `IncidentId` nullable + `CommentId` (uploader-only until linked; internal-comment attachments 404 for non-responders); allowed types png/jpeg/gif/webp/txt/log/json; 413 size / 422 type; stuck `Pending` only logs; container created at startup; build `IDistributedLock` now; blob resilience via the Azure SDK retry policy instead of Polly (a non-seekable upload stream cannot be replayed).
+
+### Previous implementation (09_01)
+Approved (QA 1011 passed, security 0 Critical/High, code review 4 Low); committed as `852e761`. Open non-blocking items are listed under "Review" below.
 
 ### Previous implementation (08_01)
 Done, review pending (`/review-spec`). `GET/POST /incidents/{id}/comments`, `GET /incidents/{id}/history`, `Comment` entity + `AddComments` migration, real `commentCount`.
@@ -72,6 +86,11 @@ Approved (QA 673/673, security 1 Low, code review 4 Low); committed as `a2bba9d`
 Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Low); committed as `7656473`. Open non-blocking items: L1 stock `RequestSizeLimit` filter may log a "could not apply limit" warning on requests with an `Idempotency-Key`; L2 bodies over 30 KB are buffered to a temp file; Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default.
 
 ## Log
+- 2026-10-13 · 08_02 · Fixed · Remaining review items SEC-1/2/3, L1, L2, L4, L5; 1163 tests green, format clean.
+- 2026-10-13 · 08_02 · Fixed · Review M1 (`ScanAttempts`, fair claim order) and L3 (per-pass stuck-pending warning); 1161 tests green, format clean.
+- 2026-10-13 · 08_02 · Reviewed · Approved — QA 1154/1154, security 3 Low, code review 1 Medium / 5 Low.
+- 2026-10-13 · 08_02 · Done · Attachment upload/download endpoints, Azure Blob store (Azurite locally), stub scanner + Worker scan job, Redis lock; full suite green with Docker (1154 tests).
+- 2026-10-13 · 08_02 · In progress · Started; pulls in the Attachment entity/table half of the entities item.
 - 2026-10-13 · 08_01 · Reviewed · Approved — QA 1012/1012 (+1 test after the fix), security 2 Low, code review 7 Low; SEC-1 fixed, 1013 tests green, format clean.
 - 2026-10-13 · 09_01 · Reviewed · Approved — QA 1011 passed, security 0 Critical/High (1 Medium, 3 Low), code review 4 Low.
 - 2026-10-13 · 08_01 · Done · Comments and history endpoints, `Comments` table, real `commentCount`; full suite green with Docker (1012 tests), plan test seeks the comments index; review pending.

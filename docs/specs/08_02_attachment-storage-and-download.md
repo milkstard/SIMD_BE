@@ -1,6 +1,6 @@
 # Spec 08_02: Attachment storage, upload & download
 
-> Status: **Draft** · Source: BE-08 in docs/BACKEND-SPECS.md · Part 02 of 03
+> Status: **Approved** · Source: BE-08 in docs/BACKEND-SPECS.md · Part 02 of 03
 
 ## 1. Purpose & scope
 
@@ -58,7 +58,7 @@ Pulled in from `deferred-items.md`: "`Comment`/`Attachment` entities, tables and
 - Responses never contain `BlobPath`.
 
 ### Worker
-`AttachmentScanJob : BackgroundService` — every 10 s claims up to 20 `Pending` attachments (`UPDLOCK, READPAST`, oldest first), streams each through `IAttachmentScanner`, `MarkScanned`, saves. Failures leave the row `Pending` and log; a row `Pending` for more than 1 hour is logged at warning (OQ 6). Single instance guarded by the Redis lock used by `SlaMonitor`.
+`AttachmentScanJob : BackgroundService` — every 10 s claims up to 20 `Pending` attachments (`UPDLOCK, READPAST`, fewest failed `ScanAttempts` first, then oldest, so an unreadable file cannot starve newer uploads), streams each through `IAttachmentScanner`, `MarkScanned`, saves. A failure leaves the row `Pending`, increments `ScanAttempts` and logs; once per pass, when the oldest `Pending` row is more than 1 hour old, a warning is logged whatever the reason (OQ 6). Single instance guarded by the Redis lock used by `SlaMonitor`.
 
 ## 4. Endpoints & DTOs
 
@@ -105,7 +105,16 @@ Pulled in from `deferred-items.md`: "`Comment`/`Attachment` entities, tables and
 - Rate limiting of uploads → the existing cross-cutting "Rate limiting" deferred item.
 - Image thumbnails/previews, resumable or chunked upload, per-user storage quotas.
 
-## 8. Open questions
+## 8. Decisions (2026-10-13)
+
+1. `Attachments.IncidentId` is nullable until linked and `CommentId` (nullable) is added; DATABASE.md updated. Unlinked: uploader only. Linked: team members of the incident's application; attachments on an internal comment are `404` for non-responders.
+2. Allowed types as proposed (png, jpeg, gif, webp, `.txt`/`.log`, `.json`; no SVG, no PDF). `413` for size, `422` on `file` for type/mismatch/empty.
+3. A stuck `Pending` scan only logs a warning. `Content-Disposition` uses RFC 5987 `filename*` plus an ASCII fallback.
+4. The blob container is created at startup by an idempotent hosted service (API and Worker), not per request.
+5. `IDistributedLock` (Redis `SET NX PX`, Lua release) is built here because `SlaMonitor` does not exist yet; BE-12 reuses it.
+6. Blob resilience uses the Azure SDK retry policy (`BlobClientOptions.Retry`), not Polly: a non-seekable upload stream cannot be replayed by a Polly retry, and stacking both would multiply retries.
+
+## 9. Original open questions (answered above)
 
 1. **Doc conflict — `Attachments.IncidentId` not null.** DATABASE.md requires it, but the contract uploads (`POST /attachments`) before the incident or comment exists (the report flow in API-CONTRACT §8). Proposal: make `IncidentId` nullable until linked, update DATABASE.md in the same change, and add `CommentId` (nullable). Confirm, or choose a different linking model.
 2. **Who may download an unlinked or linked attachment?** Proposal: unlinked → the uploader only; linked → anyone who can see the incident (team member), and an attachment linked to an **internal** comment is hidden from Reporters (`404`). Confirm.

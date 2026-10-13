@@ -6,6 +6,7 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 $settings = @{
     'ConnectionStrings__Sql'  = 'Server=localhost;Database=openapi;Trusted_Connection=true'
     'ConnectionStrings__Redis' = 'localhost:6379'
+    'Storage__Blob__ConnectionString' = 'UseDevelopmentStorage=true'
     'AzureAd__TenantId'       = '00000000-0000-0000-0000-000000000001'
     'AzureAd__ClientId'       = '00000000-0000-0000-0000-000000000002'
     'Authorization__GroupRoleMap__00000000-0000-0000-0000-000000000003' = 'Admin'
