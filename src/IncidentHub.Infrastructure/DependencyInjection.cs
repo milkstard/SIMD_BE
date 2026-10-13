@@ -1,6 +1,7 @@
 using IncidentHub.Application.Abstractions;
 using IncidentHub.Infrastructure.Caching;
 using IncidentHub.Infrastructure.Persistence;
+using IncidentHub.Infrastructure.Persistence.Search;
 using IncidentHub.Infrastructure.Security;
 using IncidentHub.Infrastructure.Sla;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<IAppTeamReader, RedisAppTeamReader>();
         services.AddScoped<IIdempotencyStore, RedisIdempotencyStore>();
         services.AddScoped<IUserDirectory, UserDirectory>();
+        services.AddScoped<ISimilarIncidentSearch, SqlSimilarIncidentSearch>();
         services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
         services.AddSlaPolicies(configuration);
 

@@ -40,6 +40,8 @@ docker compose --profile observability up -d          # + Aspire dashboard (trac
 dotnet build
 dotnet test                                           # all tests (integration tests need Docker)
 dotnet test --filter Category!=Integration            # fast unit tests only
+dotnet test --filter Category!=Performance            # everything except the opt-in performance tests (50k-row seed, slow)
+dotnet test --filter Category=Performance             # opt-in performance tests only
 dotnet run --project src/IncidentHub.Api
 dotnet run --project src/IncidentHub.Worker
 dotnet ef migrations add <Name> -p src/IncidentHub.Infrastructure -s src/IncidentHub.Api

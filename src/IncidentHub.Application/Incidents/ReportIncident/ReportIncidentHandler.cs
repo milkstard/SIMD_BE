@@ -21,9 +21,6 @@ public sealed class ReportIncidentHandler(
     TimeProvider time,
     ILogger<ReportIncidentHandler> logger) : IRequestHandler<ReportIncidentCommand, IncidentDetailDto>
 {
-    // One message for unknown, inactive and not-a-member so the response never reveals that an application exists.
-    private const string ApplicationUnavailable = "Application not found or not available to you.";
-
     public async Task<IncidentDetailDto> Handle(ReportIncidentCommand request, CancellationToken cancellationToken)
     {
         var app = await db.Applications
@@ -36,7 +33,7 @@ public sealed class ReportIncidentHandler(
             || !app.IsActive
             || !await teams.IsMemberAsync(currentUser.UserId, request.ApplicationId, cancellationToken))
         {
-            throw Invalid(nameof(request.ApplicationId), ApplicationUnavailable);
+            throw Invalid(nameof(request.ApplicationId), IncidentMessages.ApplicationUnavailable);
         }
 
         if (!app.Environments.Contains(request.Environment))

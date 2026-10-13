@@ -8,3 +8,4 @@ Items moved here from [`deferred-items.md`](deferred-items.md) once an implement
 | `OutboxMessage` entity/table; domain events → outbox rows in the same `SaveChangesAsync` | 04_01, 04_02 | 05_01 | `057a417` | Migration `AddOutboxMessages`; events cleared only after a successful save |
 | Set `AckDueAt`/`ResolveDueAt` at creation using `SlaClock` | 04_01 | 05_02 | `7656473` | Report handler calls `SlaClock.DueTimes` with the configured policy |
 | Team-membership resource check on incident endpoints (report half) | 04_01 | 05_02 | `7656473` | `POST /incidents` requires membership of the application's team; the BE-07 half stays deferred |
+| Full-text "similar incidents" query using the full-text index (incl. 50k-row seed for the p95 test) | 04_02 | 06_01 | _pending commit_ | `SqlSimilarIncidentSearch` (`FREETEXTTABLE` on Title); opt-in `Category=Performance` test, p95 111.5 ms |

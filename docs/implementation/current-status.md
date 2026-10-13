@@ -7,66 +7,51 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
-| Spec | `docs/specs/05_02_report-incident-endpoint.md` (BE-05, part 2 of 2) |
+| Spec | `docs/specs/06_01_duplicate-hints.md` (BE-06, part 1 of 1) |
 | State | Done <!-- Planned · In progress · Blocked · Done --> |
-| Started | 2026-10-12 |
-| Last updated | 2026-10-12 |
-| Branch / commit | main / `7656473` |
+| Started | 2026-10-13 |
+| Last updated | 2026-10-13 |
+| Branch / commit | main / `903879f` |
 
 ### Progress
-- [x] Docs/tracking: spec status + decided open questions, deferred/completed items
-- [x] Application: `IHtmlSanitizer`, idempotency store contract (`RequestHash`), `DuplicateIncidentException` number, DTOs, `IncidentQueries`, `ReportIncident` command/validator/handler
-- [x] Infrastructure: `HtmlSanitizerAdapter`, `RedisIdempotencyStore` hash, DI
-- [x] Api: `ReportIncidentRequest`, `IncidentsController`, `IdempotencyFilter` body hash, `ProblemDetailsMiddleware` `existingIncidentNumber`
-- [x] API-CONTRACT.md + `contracts/swagger.json`
-- [x] Tests: validator, idempotency filter, middleware, sanitizer, handler (integration), endpoint (integration)
+- [x] Docs/tracking: spec OQ 5-8 decided, deferred/completed items
+- [x] Application: `ISimilarIncidentSearch`, `IncidentMessages`, `IncidentProjections`, `FindSimilarIncidents` query/validator/handler
+- [x] Infrastructure: `SqlSimilarIncidentSearch`, DI
+- [x] Api: `IncidentsController.Similar`
+- [x] API-CONTRACT.md + `contracts/swagger.json` + CLAUDE.md Commands filter
+- [x] Tests: validator, handler, search, endpoint, performance (50k rows)
 
 ### Verification
 - `dotnet build` (whole solution, warnings as errors): 0 warnings, 0 errors.
-- `dotnet test` (all, Docker up): Domain 306, Application 76, Api.UnitTests 61, Api.IntegrationTests 186 passed, 0 failed (34 new integration tests in `Incidents/`; 17 new unit tests).
-- `dotnet format --verify-no-changes`: clean. `contracts/swagger.json` regenerated (additive: `POST /api/v1/incidents` + DTO schemas).
+- `dotnet test --filter Category!=Performance` (Docker up): Domain 306, Application 82, Api.UnitTests 68, Api.IntegrationTests 217 passed, 0 failed (5 new unit tests, 30 new integration tests).
+- `dotnet test --filter Category=Performance`: `Similar_50kSeededRows_P95Under300Ms` passed, p50 88.8 ms / p95 111.5 ms / max 185.0 ms over 100 calls against 50k seeded rows.
+- `dotnet format --verify-no-changes`: clean. `contracts/swagger.json` regenerated (additive: `GET /api/v1/incidents/similar`).
+- Note: Testcontainers on this machine needed `DOCKER_HOST=npipe://./pipe/dockerDesktopLinuxEngine` (the default `docker_engine` pipe was absent).
 
 ### Blockers / open questions
-None. Decided 2026-10-12: unknown enum name stays 400; handler tests live in Api.IntegrationTests; `canEdit`/`canAssign` as proposed (OQ 7); rate limiting deferred (OQ 9).
+None. Decided 2026-10-13: title < 3 chars -> `200 []`; policy `CanReportIncident`; FTS lag accepted and documented; perf test excluded via a documented `--filter`.
 
 ### Review
-`/review-spec` on 2026-10-12 · change set: `7656473` (05_02).
+`/review-spec` on 2026-10-13 · change set: uncommitted working tree on `903879f` (06_01).
 
 | Stage | Result | Key numbers |
 |---|---|---|
-| QA | Passed | 629 passed / 0 failed / 0 not run; 12/12 AC covered (2 partial: stepsToReproduce sanitize test, format/swagger checked by orchestrator); 0 Critical/High/Medium, 3 Low; proposed tests 1 |
-| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low (plus pre-existing MessagePack 2.5.108 and test-only SSH.NET advisories, not introduced by 05_02) |
-| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 4 Low |
+| QA | Passed | 673 passed / 0 failed / 1 performance test run separately (p95 107.6 ms); `dotnet format` clean; swagger matches the controller (first pass Incomplete: performance, format and swagger checks skipped; closed by one targeted rerun); 0 findings, 1 optional proposed test (tie-break order) |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 1 Low (reporter/assignee emails visible to team members incl. Reporters; contract-consistent) |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 4 Low |
 
 Verdict: **Approved**.
 
-Follow-up (2026-10-12, after review): code review M1 fixed (detail DTO built from in-memory values, no query after the commit); idempotency body hashed as a stream with `[RequestSizeLimit(256 KiB)]` on the action and `BadHttpRequestException` mapped to its own status (413) in the middleware; missing hash now throws instead of falling back to empty; redundant `using` removed. `stepsToReproduce` sanitizing was already asserted in `Report_ScriptInDescription_StoredSanitized`. Rebuilt, `dotnet format` clean, swagger unchanged, full suite: Domain 306, Application 76, Api.UnitTests 64, Api.IntegrationTests 186 passed, 0 failed.
+Open non-blocking items: L1 the "opt-in" performance test also runs in a plain `dotnet test` (only `--filter Category!=Performance` excludes it) and leaves 50k rows that slow later full-text waits - reword the docs or gate it behind an env var; L2 `Handle_UnknownApplication` does not isolate the missing-application branch (stub `IsMemberAsync` to `true`); L3 `'Closed'` literal in the raw SQL (pass `nameof(IncidentStatus.Closed)` as a parameter); L4 a hint can include an incident closed between the search and the projection (negligible); proposed test `FindOpenAsync_EqualRank_NewestFirst`.
 
-Still open (non-blocking, left as is): replay omits `ETag`; sanitizer default allow-list may allow remote images; legacy idempotency entries read as in-progress until TTL; controller maps a missing enum to `-1`.
-
-Review round 2 (2026-10-12, after the follow-up above):
-
-| Stage | Result | Key numbers |
-|---|---|---|
-| QA | Passed | 632 passed / 0 failed / 0 not run (first attempt Incomplete: Docker daemon down; rerun with Docker up); `dotnet format` clean; 0 new findings |
-| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
-| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 3 Low |
-
-Verdict: **Approved**. Open non-blocking items from round 2: M1 `[RequestSizeLimit]` is likely bypassed when an `Idempotency-Key` is sent, because `IdempotencyFilter` (resource filter, Order 0) buffers and hashes the body before the size-limit filter (Order 900) runs, and no test can cover it under TestServer (fix: `EnableBuffering(bufferThreshold, bufferLimit: 256 KiB)` or set `IHttpMaxRequestBodySizeFeature` in the filter); spec OQ 10 and API-CONTRACT §6 still say 413 is for files only; optional 4xx range check on `BadHttpRequestException.StatusCode`; hash is over raw bytes (document "byte-identical body").
-
-Follow-up 2 (2026-10-12, after round 2): `IdempotencyFilter` now enforces the endpoint's `[RequestSizeLimit]` (or a 1 MiB default) itself before reading the body — sets `IHttpMaxRequestBodySizeFeature` and throws `BadHttpRequestException(413)` when `Content-Length` is over the limit — so the cap also holds when an `Idempotency-Key` is sent (and now covers Teams/Applications creates); `ProblemDetailsMiddleware` only passes 4xx statuses through; `413` added to the action's responses and to API-CONTRACT §1/§6 and spec OQ 10 (byte-identical body wording included). New tests: 4 filter unit tests, `Report_BodyOverSizeLimitWithIdempotencyKey_Returns413AndCreatesNothing`. Full suite: Domain 306, Application 76, Api.UnitTests 68, Api.IntegrationTests 187 passed, 0 failed; `dotnet format` clean; swagger regenerated.
-
-Review round 3 (2026-10-12, after follow-up 2):
-
-| Stage | Result | Key numbers |
-|---|---|---|
-| QA | Passed | 637 passed / 0 failed / 0 not run (two earlier attempts Incomplete: Docker daemon down; rerun with Docker up); `dotnet format` clean; swagger and API-CONTRACT consistent; 0 findings |
-| Security | Passed | 0 Critical / 0 High / 0 Medium / 0 Low (size-limit bypass closed) |
-| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 2 Low |
-
-Verdict: **Approved**. Open non-blocking items: L1 the stock `RequestSizeLimit` filter probably logs a "could not apply limit" warning on requests that carry an `Idempotency-Key` (limit still enforced by `IdempotencyFilter`); L2 bodies over 30 KB are buffered to a temp file (`EnableBuffering(bufferThreshold: limit)` would keep them in memory); Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default (unchanged, Admin only).
+### Previous implementation (05_02)
+Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Low); committed as `7656473`. Open non-blocking items: L1 stock `RequestSizeLimit` filter may log a "could not apply limit" warning on requests with an `Idempotency-Key`; L2 bodies over 30 KB are buffered to a temp file; Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default.
 
 ## Log
+- 2026-10-13 · 06_01 · Reviewed · Approved — QA 673/673 + perf p95 107.6 ms, security 1 Low, code review 4 Low.
+- 2026-10-13 · 06_01 · Done · `GET /incidents/similar` (FREETEXTTABLE port, summary projection, 50k-row perf test p95 111.5 ms); full suite green with Docker (673 tests); review pending.
+- 2026-10-13 · 06_01 · Blocked · Integration run waited for a responding Docker engine.
+- 2026-10-13 · 06_01 · In progress · Started; pulls in the full-text similar-incidents query and the 50k-row seed from deferred items.
 - 2026-10-12 · 05_02 · Reviewed · Approved (round 3) — QA 637/637, security 0 findings, code review 2 Low; size-limit bypass with Idempotency-Key closed.
 - 2026-10-12 · 05_02 · Reviewed · Approved (round 2) — QA 632/632, security 2 Low, code review 1 Medium (size limit likely bypassed when an Idempotency-Key is sent).
 - 2026-10-12 · 05_02 · Fixed · Review follow-ups: no post-commit read (M1), idempotency body-size cap + streamed hash + 413 mapping, fail-loud hash lookup; 632 tests green.

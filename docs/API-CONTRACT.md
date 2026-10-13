@@ -250,7 +250,7 @@ public sealed record TransitionRequest(
 | GET | `/incidents/{id}/comments` | — | `200` `Paged<Comment>` | Oldest first |
 | POST | `/incidents/{id}/comments` | `AddCommentRequest` | `201` `Comment` | |
 | GET | `/incidents/{id}/history` | — | `200` `Paged<HistoryEntry>` | Newest first |
-| GET | `/incidents/similar?applicationId=&title=` | — | `200` `IncidentSummary[]` (max 5) | Open incidents only |
+| GET | `/incidents/similar?applicationId=&title=` | — | `200` `IncidentSummary[]` (max 5) | Open incidents of that application only, best title match first. Caller must belong to the application's owning team (Admin included), otherwise `422` on `applicationId` (also for unknown/inactive applications); missing `applicationId`/`title` or a title over 200 chars is `422`, a non-GUID `applicationId` is `400`. A title shorter than 3 characters returns `[]`. A just-reported incident can take a few seconds to appear (asynchronous full-text indexing) |
 
 `GET /incidents` query parameters (all optional, repeatable where plural):
 

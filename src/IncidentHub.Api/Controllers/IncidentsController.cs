@@ -2,6 +2,7 @@ using IncidentHub.Api.Auth;
 using IncidentHub.Api.Contracts;
 using IncidentHub.Api.Filters;
 using IncidentHub.Application.Incidents.Dtos;
+using IncidentHub.Application.Incidents.FindSimilarIncidents;
 using IncidentHub.Application.Incidents.ReportIncident;
 using IncidentHub.Domain.Apps;
 using IncidentHub.Domain.Incidents;
@@ -46,4 +47,19 @@ public sealed class IncidentsController(ISender sender) : ControllerBase
             cancellationToken);
         return Created($"/api/v1/incidents/{incident.Number}", incident);
     }
+
+    [HttpGet("similar")]
+    [Authorize(Policy = Policies.CanReportIncident)]
+    [ProducesResponseType<IReadOnlyList<IncidentSummaryDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<IReadOnlyList<IncidentSummaryDto>>> Similar(
+        [FromQuery] Guid? applicationId,
+        [FromQuery] string? title,
+        CancellationToken cancellationToken) =>
+        Ok(await sender.Send(
+            new FindSimilarIncidentsQuery(applicationId ?? Guid.Empty, title ?? string.Empty),
+            cancellationToken));
 }
