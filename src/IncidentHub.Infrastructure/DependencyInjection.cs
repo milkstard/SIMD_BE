@@ -35,6 +35,7 @@ public static class DependencyInjection
         services.AddScoped<IIdempotencyStore, RedisIdempotencyStore>();
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<ISimilarIncidentSearch, SqlSimilarIncidentSearch>();
+        services.AddScoped<IIncidentTextSearch, SqlIncidentTextSearch>();
         services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
         services.AddSlaPolicies(configuration);
 

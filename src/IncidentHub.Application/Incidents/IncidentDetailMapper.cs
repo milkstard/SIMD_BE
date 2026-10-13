@@ -13,9 +13,6 @@ internal static class IncidentDetailMapper
     /// </summary>
     public static IncidentDetailDto ToDetail(Incident incident, Actor actor, ApplicationRefDto application, UserRefDto reporter)
     {
-        var open = incident.Status != IncidentStatus.Closed;
-        var responder = IsResponder(actor);
-
         return new IncidentDetailDto(
             incident.Id,
             new IncidentNumber(incident.Number).ToString(),
@@ -45,10 +42,7 @@ internal static class IncidentDetailMapper
             incident.ClosedAt,
             Attachments: [],
             IncidentWorkflow.AllowedTransitions(incident, actor),
-            CanEdit: open && (responder || incident.ReporterId == actor.UserId),
-            CanAssign: open && responder);
+            CanEdit: IncidentPermissions.CanEdit(incident.Status, incident.ReporterId, actor),
+            CanAssign: IncidentPermissions.CanAssign(incident.Status, actor));
     }
-
-    private static bool IsResponder(Actor actor) =>
-        actor.IsInRole(UserRole.Responder) || actor.IsInRole(UserRole.TeamLead) || actor.IsInRole(UserRole.Admin);
 }

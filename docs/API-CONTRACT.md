@@ -242,8 +242,8 @@ public sealed record TransitionRequest(
 | Method | Path | Body | Success | Notes |
 |---|---|---|---|---|
 | POST | `/incidents` | `ReportIncidentRequest` | `201` `IncidentDetail`, `Location` header, `ETag` | `Idempotency-Key`. Caller must belong to the application's owning team (Admin included), otherwise `422` on `applicationId`; `attachmentIds` must be empty until BE-08 (`422`) |
-| GET | `/incidents` | — | `200` `Paged<IncidentSummary>` | Query below |
-| GET | `/incidents/{number}` | — | `200` `IncidentDetail` + `ETag` | |
+| GET | `/incidents` | — | `200` `Paged<IncidentSummary>` | Query below. Returns only incidents of applications owned by a team the caller belongs to (Admin included); an `applicationId` outside that set returns an empty page. `422` for an invalid `limit` (1-100), `cursor` (also one issued for another `sort`), `q` over 200 chars, `createdTo` before `createdFrom` or a bad `assigneeId`/`reporterId`; an unknown enum name, `sort` token or non-GUID id is `400` |
+| GET | `/incidents/{number}` | — | `200` `IncidentDetail` + `ETag` | `number` is the display number (`INC-1042`). `404` when the number is unknown, malformed, or the incident belongs to an application of another team (Admin included); the three cases are indistinguishable |
 | PATCH | `/incidents/{id}` | `UpdateIncidentRequest` | `200` `IncidentDetail` | `If-Match` required |
 | POST | `/incidents/{id}/transitions` | `TransitionRequest` | `200` `IncidentDetail` | `If-Match` required |
 | POST | `/incidents/{id}/assignment` | `AssignRequest` | `200` `IncidentDetail` | `If-Match` required |
@@ -261,6 +261,8 @@ q=<text>   createdFrom=<iso>   createdTo=<iso>
 sort=createdAt|-createdAt|severity|-updatedAt   (default -createdAt)
 cursor=<string>   limit=25   includeTotal=false
 ```
+
+Notes: `teamId` filters the **assigned** team. `q` is a full-text search over title and description (a just-reported incident can take a few seconds to match; at most the 500 best matches are considered). `sort=severity` lists the most severe first (Critical, High, Medium, Low), then newest first. `cursor` is opaque and only valid with the `sort` it was issued for.
 
 ### Attachments
 

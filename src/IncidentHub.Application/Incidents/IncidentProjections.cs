@@ -3,6 +3,7 @@ using IncidentHub.Application.Common;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Domain.Apps;
 using IncidentHub.Domain.Incidents;
+using IncidentHub.Domain.Users;
 using Microsoft.EntityFrameworkCore;
 
 namespace IncidentHub.Application.Incidents;
@@ -61,6 +62,73 @@ internal static class IncidentProjections
             row.IsSlaBreached,
             CommentCount: 0,
             Convert.ToBase64String(row.RowVersion));
+
+    /// <summary>The detail-only columns of one incident (the summary columns come from <see cref="SummaryRows"/>).</summary>
+    public static IQueryable<DetailExtrasRow> DetailExtras(IAppDbContext db, Guid incidentId) =>
+        from i in db.Incidents.AsNoTracking()
+        where i.Id == incidentId
+        join d in db.Incidents.AsNoTracking() on i.DuplicateOfId equals d.Id into duplicates
+        from duplicate in duplicates.DefaultIfEmpty()
+        select new DetailExtrasRow(
+            i.Description,
+            i.StepsToReproduce,
+            i.Source,
+            i.CloseReason,
+            i.AcknowledgedAt,
+            i.ResolvedAt,
+            i.ClosedAt,
+            duplicate == null ? null : duplicate.Id,
+            duplicate == null ? null : (int?)duplicate.Number);
+
+    // Comments and attachments arrive with BE-08: count 0 and no attachments until then.
+    public static IncidentDetailDto ToDetail(SummaryRow row, DetailExtrasRow extras, Actor actor)
+    {
+        var summary = ToSummary(row);
+        return new IncidentDetailDto(
+            summary.Id,
+            summary.Number,
+            summary.Title,
+            summary.Application,
+            summary.Environment,
+            summary.Severity,
+            summary.Priority,
+            summary.Status,
+            summary.Assignee,
+            summary.AssignedTeam,
+            summary.Reporter,
+            summary.CreatedAt,
+            summary.UpdatedAt,
+            summary.AckDueAt,
+            summary.ResolveDueAt,
+            summary.IsSlaBreached,
+            summary.CommentCount,
+            summary.RowVersion,
+            extras.Description,
+            extras.StepsToReproduce,
+            extras.Source,
+            extras is { DuplicateOfId: { } duplicateId, DuplicateOfNumber: { } duplicateNumber }
+                ? new DuplicateOfDto(duplicateId, new IncidentNumber(duplicateNumber).ToString())
+                : null,
+            extras.CloseReason,
+            extras.AcknowledgedAt,
+            extras.ResolvedAt,
+            extras.ClosedAt,
+            Attachments: [],
+            IncidentPermissions.AllowedTransitions(row.Status, row.Reporter.Id, row.Assignee?.Id, actor),
+            IncidentPermissions.CanEdit(row.Status, row.Reporter.Id, actor),
+            IncidentPermissions.CanAssign(row.Status, actor));
+    }
+
+    public sealed record DetailExtrasRow(
+        string Description,
+        string? StepsToReproduce,
+        IncidentSource Source,
+        CloseReason? CloseReason,
+        DateTimeOffset? AcknowledgedAt,
+        DateTimeOffset? ResolvedAt,
+        DateTimeOffset? ClosedAt,
+        Guid? DuplicateOfId,
+        int? DuplicateOfNumber);
 
     public sealed record SummaryRow(
         Guid Id,

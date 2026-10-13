@@ -13,8 +13,7 @@ Rules:
 | Post-commit dispatch of domain events to SignalR | 04_01 | BE-09 | |
 | `Comment`/`Attachment` entities, tables and events (`CommentAdded`, `AttachmentAdded`) | 04_01, 04_02 | BE-08 | |
 | `AppStatusCalculator` | 04_01 | BE-11 | |
-| Team-membership resource check on incident endpoints (all but report) | 04_01 | BE-07 | `IAppTeamReader` already exists; report half delivered by 05_02 |
-| List/detail queries using `IX_Incidents_Status_Severity` / `IX_Incidents_Application_CreatedAt` | 04_02 | BE-07 | |
+| Team-membership resource check on incident endpoints (write half: PATCH, transitions, assignment) | 04_01 | BE-07 (07_02, 07_03) | `IAppTeamReader` already exists; report half delivered by 05_02, read half (list, detail) by 07_01 |
 | `SlaPolicies` table | 04_02 | BE-12 | |
 | `Notifications` table | 04_02 | BE-14 | |
 | `IncidentDailyStats` table | 04_02 | BE-15 | |
@@ -22,4 +21,5 @@ Rules:
 | Replace config-backed `ISlaPolicyProvider` (`Sla:Defaults`) with the `SlaPolicies` table | 05_01 | BE-12 | Callers already use the async provider |
 | Link `attachmentIds` on report (+ max 10 rule); non-empty list is `422` until then | 05_02 | BE-08 | |
 | Real `commentCount` and `attachments` in `IncidentDetail` (0 / `[]` until then) | 05_02 | BE-08 | |
+| Notification delivery for `IncidentTransitioned` / `IncidentAssigned` / `IncidentUpdated` outbox rows (rows are written by 07_02/07_03) | 07_02, 07_03 | BE-10 (email), BE-13, BE-14 | Only the rows are produced in BE-07 |
 | Rate limiting on `POST /incidents` and `GET /incidents/similar` | 05_02, 06_01 | Unassigned (cross-cutting security) | No BE item owns it yet; `similar` is called while the user types |

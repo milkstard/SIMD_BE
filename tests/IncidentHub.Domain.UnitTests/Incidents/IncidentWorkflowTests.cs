@@ -126,6 +126,18 @@ public sealed class IncidentWorkflowTests
         allowedByPair.Should().BeEquivalentTo(IncidentWorkflow.AllowedTransitions(fixture.Incident, actor));
     }
 
+    [Theory]
+    [MemberData(nameof(StatusAndKind))]
+    public void AllowedTransitions_ValueOverload_MatchesAggregateOverload(IncidentStatus status, ActorKind kind)
+    {
+        var fixture = IncidentTestData.Build(status);
+        var actor = fixture.ActorOf(kind);
+
+        var byValues = IncidentWorkflow.AllowedTransitions(status, fixture.ReporterId, fixture.Incident.AssigneeId, actor);
+
+        byValues.Should().Equal(IncidentWorkflow.AllowedTransitions(fixture.Incident, actor));
+    }
+
     [Fact]
     public void AllowedTransitions_ClosedIncident_IsEmptyForEveryone()
     {

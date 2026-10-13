@@ -1,8 +1,11 @@
 using IncidentHub.Api.Auth;
 using IncidentHub.Api.Contracts;
 using IncidentHub.Api.Filters;
+using IncidentHub.Application.Common.Paging;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Application.Incidents.FindSimilarIncidents;
+using IncidentHub.Application.Incidents.GetIncident;
+using IncidentHub.Application.Incidents.ListIncidents;
 using IncidentHub.Application.Incidents.ReportIncident;
 using IncidentHub.Domain.Apps;
 using IncidentHub.Domain.Incidents;
@@ -62,4 +65,72 @@ public sealed class IncidentsController(ISender sender) : ControllerBase
         Ok(await sender.Send(
             new FindSimilarIncidentsQuery(applicationId ?? Guid.Empty, title ?? string.Empty),
             cancellationToken));
+
+    [HttpGet]
+    [Authorize(Policy = Policies.CanViewIncident)]
+    [ProducesResponseType<Paged<IncidentSummaryDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<Paged<IncidentSummaryDto>>> List(
+        [FromQuery] ListIncidentsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TryParseSort(request.Sort, out var sort))
+        {
+            ModelState.AddModelError("sort", "Sort must be createdAt, -createdAt, severity or -updatedAt.");
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(await sender.Send(
+            new ListIncidentsQuery(
+                request.Status ?? [],
+                request.Severity ?? [],
+                request.ApplicationId,
+                request.Environment,
+                request.AssigneeId,
+                request.TeamId,
+                request.ReporterId,
+                request.SlaBreached,
+                request.Q,
+                request.CreatedFrom,
+                request.CreatedTo,
+                sort,
+                request.Cursor,
+                request.Limit,
+                request.IncludeTotal),
+            cancellationToken));
+    }
+
+    // "similar" is a literal segment and wins over this parameter route.
+    [HttpGet("{number}")]
+    [Authorize(Policy = Policies.CanViewIncident)]
+    [ProducesResponseType<IncidentDetailDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IncidentDetailDto>> Get(string number, CancellationToken cancellationToken) =>
+        Ok(await sender.Send(new GetIncidentQuery(number), cancellationToken));
+
+    private static bool TryParseSort(string? token, out IncidentSort sort)
+    {
+        sort = IncidentSort.CreatedAtDesc;
+        switch (token)
+        {
+            case null or "" or "-createdAt":
+                return true;
+            case "createdAt":
+                sort = IncidentSort.CreatedAtAsc;
+                return true;
+            case "severity":
+                sort = IncidentSort.Severity;
+                return true;
+            case "-updatedAt":
+                sort = IncidentSort.UpdatedAtDesc;
+                return true;
+            default:
+                return false;
+        }
+    }
 }

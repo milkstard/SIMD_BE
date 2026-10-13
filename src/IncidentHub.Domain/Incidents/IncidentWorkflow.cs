@@ -77,6 +77,17 @@ public static class IncidentWorkflow
     public static IReadOnlyList<IncidentStatus> AllowedTransitions(Incident incident, Actor actor)
     {
         ArgumentNullException.ThrowIfNull(incident);
+
+        return AllowedTransitions(incident.Status, incident.ReporterId, incident.AssigneeId, actor);
+    }
+
+    /// <summary>Same as the aggregate overload, for callers that hold only the incident's status and relations (projected rows).</summary>
+    public static IReadOnlyList<IncidentStatus> AllowedTransitions(
+        IncidentStatus status,
+        Guid reporterId,
+        Guid? assigneeId,
+        Actor actor)
+    {
         ArgumentNullException.ThrowIfNull(actor);
 
         if (actor.IsSystem)
@@ -84,16 +95,19 @@ public static class IncidentWorkflow
             return [];
         }
 
-        return Table[incident.Status]
-            .Where(r => Satisfies(r.Who, actor, incident))
+        return Table[status]
+            .Where(r => Satisfies(r.Who, actor, reporterId, assigneeId))
             .Select(r => r.To)
             .ToList();
     }
 
     private static bool Satisfies(Who who, Actor actor, Incident incident) =>
+        Satisfies(who, actor, incident.ReporterId, incident.AssigneeId);
+
+    private static bool Satisfies(Who who, Actor actor, Guid reporterId, Guid? assigneeId) =>
         (who.HasFlag(Who.Responder) && IsResponder(actor))
-        || (who.HasFlag(Who.Assignee) && incident.AssigneeId == actor.UserId)
-        || (who.HasFlag(Who.Reporter) && incident.ReporterId == actor.UserId);
+        || (who.HasFlag(Who.Assignee) && assigneeId == actor.UserId)
+        || (who.HasFlag(Who.Reporter) && reporterId == actor.UserId);
 
     // TeamLead and Admin act as Responder in the workflow (decided for spec 04_01). Team membership is an Api check.
     private static bool IsResponder(Actor actor) =>

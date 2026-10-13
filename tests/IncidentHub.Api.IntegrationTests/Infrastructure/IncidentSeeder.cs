@@ -40,6 +40,34 @@ public sealed class IncidentSeeder(ApiFactory factory)
         return incident.Id;
     }
 
+    /// <summary>
+    /// Adds one incident through the domain with a chosen reporter, severity, creation time and description,
+    /// then lets <paramref name="configure"/> move or assign it before the save. Returns id and display number.
+    /// </summary>
+    public async Task<(Guid Id, string Number)> AddIncidentAsync(
+        Guid appId,
+        string title,
+        Guid? reporterId = null,
+        Severity severity = Severity.High,
+        DateTimeOffset? at = null,
+        string description = "<p>Users see an error page.</p>",
+        Action<Incident, Actor, DateTimeOffset>? configure = null)
+    {
+        var reporter = reporterId ?? await factory.EnsureUserAsync(Guid.NewGuid().ToString());
+        var actor = new Actor(reporter, new HashSet<UserRole> { UserRole.Responder });
+        var now = at ?? DateTimeOffset.UtcNow;
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var incident = Incident.Report(
+            appId, AppEnvironment.Production, severity, title, description, null, IncidentSource.Manual, actor, now);
+        configure?.Invoke(incident, actor, now);
+
+        db.Incidents.Add(incident);
+        await db.SaveChangesAsync();
+        return (incident.Id, new IncidentNumber(incident.Number).ToString());
+    }
+
     /// <summary>Bulk-inserts <paramref name="count"/> open incidents with varied titles (Number comes from the sequence default).</summary>
     public async Task BulkInsertAsync(Guid appId, Guid reporterId, int count, int firstIndex = 0)
     {

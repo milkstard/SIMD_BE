@@ -9,3 +9,5 @@ Items moved here from [`deferred-items.md`](deferred-items.md) once an implement
 | Set `AckDueAt`/`ResolveDueAt` at creation using `SlaClock` | 04_01 | 05_02 | `7656473` | Report handler calls `SlaClock.DueTimes` with the configured policy |
 | Team-membership resource check on incident endpoints (report half) | 04_01 | 05_02 | `7656473` | `POST /incidents` requires membership of the application's team; the BE-07 half stays deferred |
 | Full-text "similar incidents" query using the full-text index (incl. 50k-row seed for the p95 test) | 04_02 | 06_01 | _pending commit_ | `SqlSimilarIncidentSearch` (`FREETEXTTABLE` on Title); opt-in `Category=Performance` test, p95 111.5 ms |
+| List/detail queries using `IX_Incidents_Status_Severity` / `IX_Incidents_Application_CreatedAt` | 04_02 | 07_01 | _pending commit_ | Plan test (50k rows) asserts the index seeks for selective filters; `status`/`severity` lists inlined with `EF.Constant` |
+| Team-membership resource check on incident endpoints (read half: list, detail) | 04_01 | 07_01 | _pending commit_ | List scoped to the caller's teams; detail 404 for non-members; the write half stays deferred to 07_02/07_03 |
