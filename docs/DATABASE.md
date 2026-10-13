@@ -167,7 +167,7 @@ Append-only audit trail. Never updated or deleted.
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | `uniqueidentifier` | PK |
-| `IncidentId` | `uniqueidentifier` | FK → `Incidents.Id`, **nullable** — null from the upload (`POST /attachments`) until a report or comment links it (BE-08 part 3) |
+| `IncidentId` | `uniqueidentifier` | FK → `Incidents.Id`, **nullable** — null from the upload (`POST /attachments`) until a report or comment links it; the link is a concurrency token, so a file links once even under parallel requests |
 | `CommentId` | `uniqueidentifier` | FK → `Comments.Id`, nullable — set when the attachment is linked to a comment |
 | `UploadedById` | `uniqueidentifier` | FK → `Users.Id`, not null |
 | `FileName` | `nvarchar(300)` | not null |
@@ -252,7 +252,7 @@ Transactional outbox — written in the same `SaveChangesAsync` as the triggerin
 - **`AppStatus` (Operational/Degraded/Outage) is not a column anywhere.** It's computed from open `Incidents` (severity + environment) by `AppStatusCalculator` and cached in Redis — there is intentionally no `Applications.Status` column to keep it from being set directly.
 - **`Fingerprint`** is computed by the app (not a DB computed column) from `ApplicationId` + a normalized `Title`, so the partial unique index can prevent duplicate *open* incidents for the same thing.
 - **Concurrency:** every mutable aggregate (`Incidents`, `Applications`, `Teams`) carries `RowVersion`; the API requires `If-Match` on writes and returns `409` on mismatch — don't drop `RowVersion` from a DTO just because a screen doesn't show it.
-- **Soft vs hard delete:** nothing in this schema is hard-deleted except draft-stage rows (there are none persisted). `Applications.IsActive` is the only "removal" — history and incidents are retained.
+- **Soft vs hard delete:** nothing in this schema is hard-deleted except never-linked uploads (`Attachments` with `IncidentId IS NULL`, row and blob), which the Worker removes 24 hours after upload. `Applications.IsActive` is the only "removal" — history and incidents are retained.
 
 ---
 

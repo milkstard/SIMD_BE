@@ -1,6 +1,6 @@
 # Spec 08_03: Attachment linking (report, comments, detail)
 
-> Status: **Draft** · Source: BE-08 in docs/BACKEND-SPECS.md · Part 03 of 03
+> Status: **Approved** · Source: BE-08 in docs/BACKEND-SPECS.md · Part 03 of 03
 
 ## 1. Purpose & scope
 
@@ -99,10 +99,11 @@ Update `API-CONTRACT.md`: remove the "`attachmentIds` must be empty until BE-08 
 - SignalR broadcast of attachment events → BE-09.
 - Real virus-scanner integration (08_02 out of scope).
 
-## 8. Open questions
+## 8. Decisions (2026-10-13)
 
-1. **`Pending` attachments at link time.** Proposed: allowed (the user can't wait for a scan before submitting a report); `Infected` is rejected. Confirm.
-2. **DATABASE.md rule "nothing is hard-deleted".** The orphan sweeper hard-deletes never-linked uploads (draft-stage rows, which the rule explicitly excepts) — confirm this reading, and update the rule text to name uploads.
-3. **Orphan TTL** 24 h is a proposal; BACKEND-SPECS does not give one.
-4. **Does linking to a comment on a `Closed` incident work?** Follows 08_01 OQ 3 (allowed).
-5. **Same-team uploads.** The uploader-only linking rule blocks a teammate from reusing someone's upload; intentional (prevents guessing ids), confirm.
+1. **`Pending` attachments at link time:** allowed; `Infected` is rejected (`422` on `attachmentIds`).
+2. **Hard delete:** the sweeper hard-deletes uploads still unlinked after **24 h** (row, then blob). The DATABASE.md rule names never-linked uploads as the exception.
+3. **Closed incidents:** a comment on a closed incident can carry attachments (follows 08_01).
+4. **Uploader only:** only the uploader links a file. Unknown, foreign, already-linked and Infected ids give the same message.
+5. **Concurrency:** `Attachments.IncidentId` is an EF concurrency token, so the link is `UPDATE ... WHERE IncidentId IS NULL`; the loser gets `422` and its whole save rolls back.
+6. **Where the sweeper lives:** `OrphanAttachmentSweeper` in Infrastructure (like `AttachmentScanRunner`, so integration tests run a pass); the Worker job is a thin loop under the `orphan-attachments` Redis lock.

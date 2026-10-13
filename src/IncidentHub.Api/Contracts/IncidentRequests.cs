@@ -77,4 +77,4 @@ public sealed class ListIncidentsRequest
 }
 
 /// <summary>API-CONTRACT <c>AddCommentRequest</c>. A missing <c>isInternal</c> means a public comment.</summary>
-public sealed record AddCommentRequest(string? Body, bool? IsInternal);
+public sealed record AddCommentRequest(string? Body, bool? IsInternal, List<Guid>? AttachmentIds);

@@ -1,4 +1,5 @@
 using FluentValidation;
+using IncidentHub.Application.Attachments;
 using IncidentHub.Domain.Incidents;
 
 namespace IncidentHub.Application.Incidents.ReportIncident;
@@ -26,9 +27,6 @@ public sealed class ReportIncidentValidator : AbstractValidator<ReportIncidentCo
         RuleFor(x => x.StepsToReproduce)
             .MaximumLength(Incident.StepsMaxLength);
 
-        // Linking attachments arrives with BE-08 (which adds the max-10 rule).
-        RuleFor(x => x.AttachmentIds)
-            .Empty()
-            .WithMessage("Attachments cannot be linked yet.");
+        RuleFor(x => x.AttachmentIds).MustBeLinkableIds();
     }
 }

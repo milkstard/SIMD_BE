@@ -3,4 +3,4 @@ using MediatR;
 
 namespace IncidentHub.Application.Incidents.AddComment;
 
-public sealed record AddCommentCommand(Guid IncidentId, string Body, bool IsInternal) : IRequest<CommentDto>;
+public sealed record AddCommentCommand(Guid IncidentId, string Body, bool IsInternal, IReadOnlyList<Guid> AttachmentIds) : IRequest<CommentDto>;

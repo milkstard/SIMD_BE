@@ -83,6 +83,7 @@ public static class DependencyInjection
 
         services.AddSingleton<IAttachmentScanner, StubAttachmentScanner>();
         services.AddScoped<AttachmentScanRunner>();
+        services.AddScoped<OrphanAttachmentSweeper>();
         services.AddSingleton<IDistributedLock, RedisDistributedLock>();
     }
 

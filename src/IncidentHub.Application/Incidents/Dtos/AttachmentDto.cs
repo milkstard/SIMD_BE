@@ -11,4 +11,15 @@ public sealed record AttachmentDto(
     long SizeBytes,
     ScanStatus ScanStatus,
     UserRefDto UploadedBy,
-    DateTimeOffset UploadedAt);
+    DateTimeOffset UploadedAt)
+{
+    public static AttachmentDto From(Attachment attachment, UserRefDto uploadedBy) =>
+        new(
+            attachment.Id,
+            attachment.FileName,
+            attachment.ContentType,
+            attachment.SizeBytes,
+            attachment.ScanStatus,
+            uploadedBy,
+            attachment.CreatedAt);
+}

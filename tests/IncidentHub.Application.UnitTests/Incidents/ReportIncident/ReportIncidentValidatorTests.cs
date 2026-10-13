@@ -101,10 +101,32 @@ public sealed class ReportIncidentValidatorTests
     }
 
     [Fact]
-    public void Validate_AttachmentIdsNotEmpty_HasAttachmentIdsError()
+    public void Validate_ElevenAttachmentIds_HasAttachmentIdsError()
     {
-        var result = _validator.TestValidate(Valid(attachmentIds: [Guid.NewGuid()]));
+        var ids = Enumerable.Range(0, Attachment.MaxPerAction + 1).Select(_ => Guid.NewGuid()).ToList();
 
-        result.ShouldHaveValidationErrorFor(x => x.AttachmentIds).WithErrorMessage("Attachments cannot be linked yet.");
+        _validator.TestValidate(Valid(attachmentIds: ids)).ShouldHaveValidationErrorFor(x => x.AttachmentIds);
+    }
+
+    [Fact]
+    public void Validate_DuplicateAttachmentIds_HasAttachmentIdsError()
+    {
+        var id = Guid.NewGuid();
+
+        _validator.TestValidate(Valid(attachmentIds: [id, id])).ShouldHaveValidationErrorFor(x => x.AttachmentIds);
+    }
+
+    [Fact]
+    public void Validate_EmptyAttachmentId_HasAttachmentIdsError()
+    {
+        _validator.TestValidate(Valid(attachmentIds: [Guid.Empty])).ShouldHaveValidationErrorFor(x => x.AttachmentIds);
+    }
+
+    [Fact]
+    public void Validate_TenAttachmentIds_NoErrors()
+    {
+        var ids = Enumerable.Range(0, Attachment.MaxPerAction).Select(_ => Guid.NewGuid()).ToList();
+
+        _validator.TestValidate(Valid(attachmentIds: ids)).ShouldNotHaveValidationErrorFor(x => x.AttachmentIds);
     }
 }

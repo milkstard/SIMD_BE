@@ -16,3 +16,7 @@ Items moved here from [`deferred-items.md`](deferred-items.md) once an implement
 | `Comment` entity, `Comments` table and `CommentAdded` event | 04_01, 04_02 | 08_01 | _pending commit_ | Migration `AddComments`; `Incident.AddComment` writes a `Comment`/`InternalComment` history row; the event reaches the outbox generically |
 | Real `commentCount` in `IncidentSummary`/`IncidentDetail` | 05_02 | 08_01 | _pending commit_ | Per-caller count: non-responders count public comments only; `attachments` stays `[]` until 08_03 |
 | `Attachment` entity and `Attachments` table | 04_01, 04_02 | 08_02 | _pending commit_ | Migration `AddAttachments`; `IncidentId` nullable until linked (08_03), `CommentId` added; `AttachmentAdded` stays with 08_03 |
+| `AttachmentAdded` event | 04_01, 04_02 | 08_03 | _pending commit_ | Raised by `Incident.AttachFiles` (one per file); reaches the outbox generically, with a history row (`Attachment` / `InternalAttachment`) |
+| Orphan sweeper for unlinked uploads after a TTL | 08_02 | 08_03 | _pending commit_ | `OrphanAttachmentSweeper` + Worker `OrphanAttachmentJob` (hourly, Redis lock): uploads unlinked after 24 h lose row and blob |
+| Link `attachmentIds` on report (+ max 10 rule) | 05_02 | 08_03 | _pending commit_ | `AttachmentLinker` (uploader only, one generic 422); linking is a concurrency-checked update in the same save as the incident |
+| Real `attachments` in `IncidentDetail` | 05_02 | 08_03 | _pending commit_ | Incident-level files in the detail, comment files on each comment (batched query) |

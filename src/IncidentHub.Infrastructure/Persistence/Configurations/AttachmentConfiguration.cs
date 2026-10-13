@@ -20,6 +20,9 @@ public sealed class AttachmentConfiguration : IEntityTypeConfiguration<Attachmen
         builder.Property(a => a.BlobPath).HasMaxLength(Attachment.BlobPathMaxLength).IsRequired();
         builder.Property(a => a.ScanStatus).HasConversion<string>().HasMaxLength(20).IsRequired();
 
+        // A concurrency token: linking is UPDATE ... WHERE IncidentId IS NULL, so of two parallel links exactly one updates the row.
+        builder.Property(a => a.IncidentId).IsConcurrencyToken();
+
         builder.HasIndex(a => a.IncidentId).HasDatabaseName("IX_Attachments_IncidentId");
 
         // Orphan sweep and "my unlinked uploads": only the rows that are not linked yet.

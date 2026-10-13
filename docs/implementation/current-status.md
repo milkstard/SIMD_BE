@@ -7,40 +7,43 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
-| Spec | `docs/specs/08_02_attachment-storage-and-download.md` (BE-08, part 2 of 3) |
+| Spec | `docs/specs/08_03_attachment-linking.md` (BE-08, part 3 of 3) |
 | State | Done <!-- Planned · In progress · Blocked · Done --> |
 | Started | 2026-10-13 |
 | Last updated | 2026-10-13 |
-| Branch / commit | main / `852e761` |
+| Branch / commit | main / `2a60af1` |
 
 ### Progress
-- [x] Docs/tracking: spec decisions (08_02 §8), deferred/completed items
-- [x] Domain: `ScanStatus`, `Attachment`, `AttachmentRules`
-- [x] Application: `IFileStore`, `IAttachmentScanner`, `IDistributedLock`, `UploadAttachment`, `GetAttachmentDownload`, exceptions
-- [x] Infrastructure: `AttachmentConfiguration` + `AddAttachments` migration, `AzureBlobFileStore`, container initializer, stub scanner, `RedisDistributedLock`, `AttachmentScanRunner`
-- [x] Api: `AttachmentsController`, multipart reader, problem mappings, swagger
-- [x] Worker: `AttachmentScanJob`
-- [x] API-CONTRACT.md, DATABASE.md, CLAUDE.md config line, `contracts/swagger.json`
-- [x] Tests (unit + integration with Azurite)
+- [x] Docs/tracking: spec decisions (08_03 §8), deferred/completed items
+- [x] Domain: `Attachment.LinkTo`, `AttachmentAdded`, `Incident.AttachFiles`, `Report`/`AddComment` take attachments
+- [x] Application: validators (max 10), `AttachmentLinker`, Report/AddComment handlers, real `attachments` in detail and comments, history fields
+- [x] Infrastructure: concurrency token on `Attachments.IncidentId` (snapshot-only migration `AttachmentLinkConcurrency`), `OrphanAttachmentSweeper`
+- [x] Api: `attachmentIds` on `AddCommentRequest`
+- [x] Worker: `OrphanAttachmentJob`
+- [x] API-CONTRACT.md, DATABASE.md, `contracts/swagger.json`
+- [x] Tests (unit + integration)
 
 ### Verification
-- `dotnet build` (whole solution): 0 warnings, 0 errors.
-- `dotnet test --filter Category!=Performance` with Docker: Domain 438, Application 189, Api.UnitTests 75, Api.IntegrationTests 452 passed, 0 failed (52 are new attachment tests: upload, download, scan job, storage contract against Azurite, Redis lock).
-- `dotnet format --verify-no-changes` clean; `contracts/swagger.json` regenerated (new `/attachments` operations, multipart body).
-- Not run: the manual smoke test with the real Worker process (the scan job is covered through `AttachmentScanRunner`).
-- Deviations from the spec: non-multipart body is `400` (no `[Consumes]`, which would give `415`); `AttachmentScanRunner`, scanner and lock are registered by `AddInfrastructure` (the tests resolve them from the API host) instead of a separate `AddAttachmentScanning`; blob retries use the Azure SDK policy, not Polly.
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format --verify-no-changes` clean.
+- `dotnet test --filter Category!=Performance` with Docker: Domain 456, Application 196, Api.UnitTests 75, Api.IntegrationTests 484 passed, 0 failed (new: `AttachmentLinkTests`, validator cases, `ReportIncidentAttachmentTests`, `CommentAttachmentTests` incl. concurrent link and constant query count, `OrphanAttachmentJobTests`).
+- `contracts/swagger.json` regenerated: additive (`attachmentIds` on the comment request).
+- Not run: a manual smoke test with the real Worker process (the sweeper is covered through `OrphanAttachmentSweeper`).
+- Deviations from the spec: the sweeper lives in Infrastructure with a thin Worker job (decision 6); the link race is settled by an EF concurrency token on `IncidentId`, so the migration only updates the model snapshot.
 
 ### Review
 | Stage | Result | Key numbers |
 |---|---|---|
-| QA | Passed | 1154/1154 passed (Domain 438, Application 189, Api.UnitTests 75, integration 452), 0 proposed tests required, 3 Low |
-| Security | Passed | 0 Critical / 0 High / 0 Medium / 3 Low |
-| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 5 Low |
+| QA | Passed | 1211/1211 passed, 0 proposed tests required, 1 Medium, 3 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 5 Low |
 
-Verdict: **Approved**. Fixed after the review: M1 (new `Attachments.ScanAttempts`; the claim orders by attempts then age, so unreadable files sink behind new uploads; test `Scan_RowsThatKeepFailing_DoNotStarveNewerUploads`, which fails without the fix) and L3 (once per pass the oldest `Pending` row is checked and a warning logged when it is over 1 hour old, whatever the cause; two tests). The `AddAttachments` migration was regenerated (never applied or committed). Full suite re-run green (1161 tests), build 0 warnings, format clean, swagger unchanged. Also fixed afterwards: SEC-1 (SAS is HTTPS-only except on the plain-HTTP emulator), SEC-2 (format/bidi/zero-width characters and line separators stripped from file names), SEC-3 (the scan pass stops starting files after a 30 s budget, so it ends before the 60 s lock expires), L1 (a failing container creation at start-up is logged, the host keeps running), L2 (`InvariantCulture` in the blob path), L4 (the `Location` 409-until-Clean behaviour is documented in API-CONTRACT), L5 (a failed lock release is logged as a warning, not a failed pass). The 1-hour warning test and the 'no FileResult' guard (302 asserted by the endpoint tests) were already covered; no Application-level `GetAttachmentDownloadHandlerTests` because the handler is an EF projection (covered by the endpoint tests). New tests: bidi/zero-width file names, spent scan budget. Full suite 1163 green, build 0 warnings, format clean. Pre-existing dependency advisories (MessagePack, SSH.NET) are tracked under 08_01 SEC-2.
+Verdict: **Approved**. Fixed after the review: QA M1 (new deterministic test `LinkAttachment_TwoContextsLoadedUnlinked_SecondSaveThrowsConcurrency`; it fails when the token is removed), L1 (already true: the handler throws the 403 before loading attachments; pinned by `Comment_InternalAsReporterWithBadAttachment_Returns403Not422`) and L5 (dead null checks removed); full suite re-run green (1213 tests), build 0 warnings, format clean. Open non-blocking items: QA Low: the rollback test bypasses the handlers and covers report only, comment-path 422 cases (duplicate, Infected, already linked) have no integration test, no `AttachmentLinker` unit tests (it is `internal static` over `IAppDbContext`, covered at integration level), sweeper `BatchSize` 100 per hour. Security: SEC-1 transitive MessagePack (pre-existing, 08_01 SEC-4), SEC-2 the `OrphanAttachmentJob` drain loop is not capped to the 5-minute lock. Code review: L2 the `DbUpdateConcurrencyException` catch is safe only while these saves update no other guarded row; L3 a real scanner's `UPDLOCK` batch could make a link of a `Pending` file wait; L4 `Incident.AttachFiles` takes `isInternal` separately from `commentId`.
 
 ### Blockers / open questions
-None. Decided 2026-10-13: `IncidentId` nullable + `CommentId` (uploader-only until linked; internal-comment attachments 404 for non-responders); allowed types png/jpeg/gif/webp/txt/log/json; 413 size / 422 type; stuck `Pending` only logs; container created at startup; build `IDistributedLock` now; blob resilience via the Azure SDK retry policy instead of Polly (a non-seekable upload stream cannot be replayed).
+None. Decided 2026-10-13: `Pending` files can be linked, `Infected` ones cannot; never-linked uploads are hard-deleted after 24 h; comments on a closed incident can carry attachments; only the uploader can link (one generic 422 message).
+
+### Previous implementation (08_02)
+Approved (QA 1154/1154, security 3 Low, code review 1 Medium / 5 Low, all fixed afterwards; 1163 tests green); committed as `2a60af1`. Pending items: a manual smoke test with the real Worker process, and no Application-level `GetAttachmentDownloadHandlerTests`.
 
 ### Previous implementation (09_01)
 Approved (QA 1011 passed, security 0 Critical/High, code review 4 Low); committed as `852e761`. Open non-blocking items are listed under "Review" below.
@@ -86,6 +89,10 @@ Approved (QA 673/673, security 1 Low, code review 4 Low); committed as `a2bba9d`
 Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Low); committed as `7656473`. Open non-blocking items: L1 stock `RequestSizeLimit` filter may log a "could not apply limit" warning on requests with an `Idempotency-Key`; L2 bodies over 30 KB are buffered to a temp file; Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default.
 
 ## Log
+- 2026-10-13 · 08_03 · Fixed · Review M1 (deterministic concurrency test) and L5; L1 was already satisfied (test added); 1213 tests green, format clean.
+- 2026-10-13 · 08_03 · Reviewed · Approved — QA 1211/1211 (1 Medium, 3 Low), security 2 Low, code review 5 Low.
+- 2026-10-13 · 08_03 · Done · Attachment linking on report and comments, real `attachments`, `AttachmentAdded`, orphan sweeper; full suite green with Docker (1211 tests); review pending.
+- 2026-10-13 · 08_03 · In progress · Started; pulls in linking `attachmentIds`, real `attachments`, `AttachmentAdded` and the orphan sweeper from deferred items.
 - 2026-10-13 · 08_02 · Fixed · Remaining review items SEC-1/2/3, L1, L2, L4, L5; 1163 tests green, format clean.
 - 2026-10-13 · 08_02 · Fixed · Review M1 (`ScanAttempts`, fair claim order) and L3 (per-pass stuck-pending warning); 1161 tests green, format clean.
 - 2026-10-13 · 08_02 · Reviewed · Approved — QA 1154/1154, security 3 Low, code review 1 Medium / 5 Low.

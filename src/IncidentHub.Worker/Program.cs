@@ -14,6 +14,7 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSingleton<ICurrentUser, SystemCurrentUser>();
 builder.Services.AddHostedService<AttachmentScanJob>();
+builder.Services.AddHostedService<OrphanAttachmentJob>();
 
 var host = builder.Build();
 host.Run();

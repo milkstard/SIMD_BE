@@ -13,6 +13,9 @@ public sealed class Attachment : Entity
     public const int ContentTypeMaxLength = 100;
     public const int BlobPathMaxLength = 500;
 
+    /// <summary>Most files one report or comment can link.</summary>
+    public const int MaxPerAction = 10;
+
     private Attachment()
     {
     }
@@ -78,6 +81,23 @@ public sealed class Attachment : Entity
             BlobPath = blobPath,
             CreatedAt = at,
         };
+    }
+
+    /// <summary>Links the upload to an incident, and to one of its comments when <paramref name="commentId"/> is set. Once only.</summary>
+    public void LinkTo(Guid incidentId, Guid? commentId)
+    {
+        if (IncidentId is not null)
+        {
+            throw new InvalidOperationException($"Attachment {Id} is already linked.");
+        }
+
+        if (ScanStatus == ScanStatus.Infected)
+        {
+            throw new InvalidOperationException($"Attachment {Id} is infected and cannot be linked.");
+        }
+
+        IncidentId = incidentId;
+        CommentId = commentId;
     }
 
     /// <summary>Records the scan outcome. Only <c>Pending</c> can change; repeating the same result is a no-op.</summary>

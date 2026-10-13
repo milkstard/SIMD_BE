@@ -9,9 +9,14 @@ internal static class IncidentDetailMapper
 {
     /// <summary>
     /// Builds the detail DTO for a freshly reported incident from the saved aggregate and the refs the caller already holds
-    /// (a new incident has no assignee or team). Comments and attachments are empty until BE-08.
+    /// (a new incident has no assignee or team). The comment count is 0; <paramref name="attachments"/> are the files just linked.
     /// </summary>
-    public static IncidentDetailDto ToDetail(Incident incident, Actor actor, ApplicationRefDto application, UserRefDto reporter)
+    public static IncidentDetailDto ToDetail(
+        Incident incident,
+        Actor actor,
+        ApplicationRefDto application,
+        UserRefDto reporter,
+        IReadOnlyList<AttachmentDto> attachments)
     {
         return new IncidentDetailDto(
             incident.Id,
@@ -40,7 +45,7 @@ internal static class IncidentDetailMapper
             incident.AcknowledgedAt,
             incident.ResolvedAt,
             incident.ClosedAt,
-            Attachments: [],
+            attachments,
             IncidentWorkflow.AllowedTransitions(incident, actor),
             CanEdit: IncidentPermissions.CanEdit(incident.Status, incident.ReporterId, actor),
             CanAssign: IncidentPermissions.CanAssign(incident.Status, actor));

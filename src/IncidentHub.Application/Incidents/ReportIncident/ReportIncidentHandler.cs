@@ -1,6 +1,7 @@
 using FluentValidation;
 using FluentValidation.Results;
 using IncidentHub.Application.Abstractions;
+using IncidentHub.Application.Attachments;
 using IncidentHub.Application.Common;
 using IncidentHub.Application.Common.Exceptions;
 using IncidentHub.Application.Incidents.Dtos;
@@ -62,6 +63,8 @@ public sealed class ReportIncidentHandler(
             throw new DuplicateIncidentException(new IncidentNumber(number).ToString());
         }
 
+        var attachments = await AttachmentLinker.LoadLinkableAsync(db, request.AttachmentIds, currentUser.UserId, cancellationToken);
+
         var actor = currentUser.ToActor();
         var incident = Incident.Report(
             request.ApplicationId,
@@ -72,21 +75,33 @@ public sealed class ReportIncidentHandler(
             string.IsNullOrWhiteSpace(steps) ? null : steps,
             IncidentSource.Manual,
             actor,
-            time.GetUtcNow());
+            time.GetUtcNow(),
+            attachments: attachments);
 
         var policy = await slaPolicies.GetAsync(request.Severity, cancellationToken);
         var due = SlaClock.DueTimes(policy, incident.CreatedAt);
         incident.SetSlaDueTimes(due.AckDueAt, due.ResolveDueAt);
 
         db.Incidents.Add(incident);
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException) when (attachments.Count > 0)
+        {
+            // The link is UPDATE ... WHERE IncidentId IS NULL: a parallel request linked one of the files first, and this save rolled back.
+            throw AttachmentLinker.Unavailable422();
+        }
+
+        var uploader = new UserRefDto(currentUser.UserId, currentUser.DisplayName, currentUser.Email);
 
         // Built from values already in memory: a failing read after the commit would turn a stored incident into a 500 and a confusing duplicate 409 on retry.
         var detail = IncidentDetailMapper.ToDetail(
             incident,
             actor,
             new ApplicationRefDto(request.ApplicationId, app.Name, app.Code),
-            new UserRefDto(currentUser.UserId, currentUser.DisplayName, currentUser.Email));
+            uploader,
+            attachments.Select(a => AttachmentDto.From(a, uploader)).ToList());
         logger.LogInformation(
             "Incident {IncidentNumber} reported for application {ApplicationId} with severity {Severity}",
             detail.Number,

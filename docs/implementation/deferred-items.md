@@ -11,16 +11,12 @@ Rules:
 | Item | Source spec | Deferred to | Notes |
 |---|---|---|---|
 | Post-commit dispatch of domain events to SignalR | 04_01 | BE-09 (09_02) | Hook sits in `AppDbContext.OnSaved` |
-| `AttachmentAdded` event | 04_01, 04_02 | BE-08 (08_03) | Entity and table were delivered by 08_02, the Comment half and `CommentAdded` by 08_01 |
-| Orphan sweeper for unlinked uploads after a TTL | 08_02 | BE-08 (08_03) / ops | Unlinked attachments (`IncidentId IS NULL`) are kept until then; filtered index `IX_Attachments_Unlinked` supports it |
 | `AppStatusCalculator` | 04_01 | BE-11 | |
 | `SlaPolicies` table | 04_02 | BE-12 | |
 | `Notifications` table | 04_02 | BE-14 | |
 | `IncidentDailyStats` table | 04_02 | BE-15 | |
 | Dispatch `IncidentReported` outbox rows (email to the owning team) | 05_01 | BE-10 | Table and same-transaction write are built in 05_01; BE-10 keeps only the dispatcher |
 | Replace config-backed `ISlaPolicyProvider` (`Sla:Defaults`) with the `SlaPolicies` table | 05_01 | BE-12 | Callers already use the async provider |
-| Link `attachmentIds` on report (+ max 10 rule); non-empty list is `422` until then | 05_02 | BE-08 (08_03) | |
-| Real `attachments` in `IncidentDetail` (`[]` until then) | 05_02 | BE-08 (08_03) | `commentCount` was delivered by 08_01 |
 | Notification delivery for `IncidentTransitioned` / `IncidentAssigned` / `IncidentUpdated` / `CommentAdded` / `AttachmentAdded` outbox rows (rows are written by 07_02/07_03/08_01/08_03) | 07_02, 07_03, 08_01, 08_03 | BE-10 (email), BE-13, BE-14 | Only the rows are produced in BE-07/BE-08 |
 | Rate limiting on `POST /incidents`, `GET /incidents/similar`, `POST /attachments` and `POST /incidents/{id}/comments` | 05_02, 06_01, 08_01, 08_02 | Unassigned (cross-cutting security) | No BE item owns it yet; `similar` is called while the user types |
 | SignalR `CommentAdded` (responders-only for internal comments) and attachment events after commit | 08_01, 08_03 | BE-09 | Covered by the post-commit dispatch item above; `CommentAdded` payload must honour `IsInternal` |

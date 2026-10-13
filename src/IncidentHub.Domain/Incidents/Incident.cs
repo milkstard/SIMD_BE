@@ -21,6 +21,10 @@ public sealed class Incident : AggregateRoot
     public const string CommentHistoryField = "Comment";
     public const string InternalCommentHistoryField = "InternalComment";
 
+    /// <summary>History <c>Field</c> values of a linked file; <c>NewValue</c> is the file name. Internal ones are hidden from non-responders.</summary>
+    public const string AttachmentHistoryField = "Attachment";
+    public const string InternalAttachmentHistoryField = "InternalAttachment";
+
     private readonly List<IncidentHistory> _history = [];
 
     private Incident()
@@ -92,7 +96,8 @@ public sealed class Incident : AggregateRoot
         IncidentSource source,
         Actor reporter,
         DateTimeOffset at,
-        string? externalId = null)
+        string? externalId = null,
+        IReadOnlyCollection<Attachment>? attachments = null)
     {
         ArgumentNullException.ThrowIfNull(reporter);
         ValidateApplicationId(applicationId);
@@ -119,6 +124,13 @@ public sealed class Incident : AggregateRoot
 
         incident.AddHistory(nameof(Status), null, IncidentStatus.New, null, ActorIdOf(reporter), at);
         incident.Raise(new IncidentReported(incident.Id, applicationId, environment, severity, source, reporter.UserId, at));
+
+        // Linked in the same call that creates the incident: no window with a linked file and an unreported incident.
+        if (attachments is { Count: > 0 })
+        {
+            incident.AttachFiles(attachments, reporter, at);
+        }
+
         return incident;
     }
 
@@ -183,7 +195,7 @@ public sealed class Incident : AggregateRoot
     /// <see cref="UpdatedAt"/> alone so a comment never makes another editor's <c>If-Match</c> stale.
     /// </summary>
     /// <exception cref="CommentNotPermittedException">An internal comment by an actor that is not a responder.</exception>
-    public Comment AddComment(string body, bool isInternal, Actor actor, DateTimeOffset at)
+    public Comment AddComment(string body, bool isInternal, Actor actor, DateTimeOffset at, IReadOnlyCollection<Attachment>? attachments = null)
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentException.ThrowIfNullOrWhiteSpace(body);
@@ -201,7 +213,51 @@ public sealed class Incident : AggregateRoot
         var comment = Comment.Create(Id, actor.UserId, body, isInternal, at);
         AddHistory(isInternal ? InternalCommentHistoryField : CommentHistoryField, null, comment.Id, null, actor.UserId, at);
         Raise(new CommentAdded(Id, comment.Id, isInternal, actor.UserId, at));
+
+        if (attachments is { Count: > 0 })
+        {
+            AttachFiles(attachments, actor, at, comment.Id, isInternal);
+        }
+
         return comment;
+    }
+
+    /// <summary>
+    /// Links uploads of <paramref name="actor"/> to this incident (or to one of its comments), one history row and one
+    /// <see cref="AttachmentAdded"/> event per file.
+    /// </summary>
+    /// <exception cref="ArgumentException">More than <see cref="Attachment.MaxPerAction"/> files, or a file uploaded by someone else.</exception>
+    /// <exception cref="InvalidOperationException">The actor is the system, or a file is already linked or infected.</exception>
+    public void AttachFiles(
+        IReadOnlyCollection<Attachment> attachments,
+        Actor actor,
+        DateTimeOffset at,
+        Guid? commentId = null,
+        bool isInternal = false)
+    {
+        ArgumentNullException.ThrowIfNull(attachments);
+        ArgumentNullException.ThrowIfNull(actor);
+        if (actor.IsSystem)
+        {
+            throw new InvalidOperationException("Files are attached by users, not by the system.");
+        }
+
+        if (attachments.Count > Attachment.MaxPerAction)
+        {
+            throw new ArgumentException($"At most {Attachment.MaxPerAction} files can be attached at once.", nameof(attachments));
+        }
+
+        if (attachments.Any(a => a.UploadedById != actor.UserId))
+        {
+            throw new ArgumentException("Only the uploader can attach a file.", nameof(attachments));
+        }
+
+        foreach (var attachment in attachments)
+        {
+            attachment.LinkTo(Id, commentId);
+            AddHistory(isInternal ? InternalAttachmentHistoryField : AttachmentHistoryField, null, attachment.FileName, null, actor.UserId, at);
+            Raise(new AttachmentAdded(Id, attachment.Id, commentId, isInternal, actor.UserId, at));
+        }
     }
 
     /// <summary>Replaces assignee and team. Does nothing (no history, no event) when neither changes.</summary>

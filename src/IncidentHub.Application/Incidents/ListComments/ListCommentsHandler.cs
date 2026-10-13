@@ -45,7 +45,7 @@ public sealed class ListCommentsHandler(
                 new UserRefDto(x.Author.Id, x.Author.DisplayName, x.Author.Email),
                 x.Comment.Body,
                 x.Comment.IsInternal,
-                new List<AttachmentDto>(),
+                Array.Empty<AttachmentDto>(),
                 x.Comment.CreatedAt,
                 x.Comment.EditedAt))
             .ToListAsync(cancellationToken);
@@ -55,6 +55,18 @@ public sealed class ListCommentsHandler(
         {
             rows.RemoveAt(rows.Count - 1);
             next = TimeKeysetCursor.Encode(rows[^1].CreatedAt, rows[^1].Id);
+        }
+
+        // One query for the whole page (no N+1). Internal comments are already out of the page for a non-responder,
+        // so their files are never loaded.
+        if (rows.Count > 0)
+        {
+            var ids = rows.Select(r => r.Id).ToList();
+            var files = await IncidentProjections
+                .AttachmentRows(db, db.Attachments.Where(a => a.CommentId != null && ids.Contains(a.CommentId.Value)))
+                .ToListAsync(cancellationToken);
+            var byComment = files.ToLookup(f => f.CommentId!.Value, f => f.Attachment);
+            rows = rows.Select(r => r with { Attachments = byComment[r.Id].ToList() }).ToList();
         }
 
         return new Paged<CommentDto>(rows, next, total);

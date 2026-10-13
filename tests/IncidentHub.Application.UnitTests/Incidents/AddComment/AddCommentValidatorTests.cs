@@ -8,8 +8,8 @@ public sealed class AddCommentValidatorTests
 {
     private readonly AddCommentValidator _validator = new();
 
-    private static AddCommentCommand Command(string body, Guid? incidentId = null) =>
-        new(incidentId ?? Guid.NewGuid(), body, false);
+    private static AddCommentCommand Command(string body, Guid? incidentId = null, IReadOnlyList<Guid>? attachmentIds = null) =>
+        new(incidentId ?? Guid.NewGuid(), body, false, attachmentIds ?? []);
 
     [Fact]
     public void Validate_ValidBody_NoErrors()
@@ -35,6 +35,36 @@ public sealed class AddCommentValidatorTests
     public void Validate_BodyAtLimit_NoErrors()
     {
         _validator.TestValidate(Command(new string('a', Comment.BodyMaxLength))).ShouldNotHaveValidationErrorFor(x => x.Body);
+    }
+
+    [Fact]
+    public void Validate_ElevenAttachmentIds_HasError()
+    {
+        var ids = Enumerable.Range(0, Attachment.MaxPerAction + 1).Select(_ => Guid.NewGuid()).ToList();
+
+        _validator.TestValidate(Command("x", attachmentIds: ids)).ShouldHaveValidationErrorFor(x => x.AttachmentIds);
+    }
+
+    [Fact]
+    public void Validate_DuplicateAttachmentIds_HasError()
+    {
+        var id = Guid.NewGuid();
+
+        _validator.TestValidate(Command("x", attachmentIds: [id, id])).ShouldHaveValidationErrorFor(x => x.AttachmentIds);
+    }
+
+    [Fact]
+    public void Validate_EmptyAttachmentId_HasError()
+    {
+        _validator.TestValidate(Command("x", attachmentIds: [Guid.Empty])).ShouldHaveValidationErrorFor(x => x.AttachmentIds);
+    }
+
+    [Fact]
+    public void Validate_TenAttachmentIds_NoErrors()
+    {
+        var ids = Enumerable.Range(0, Attachment.MaxPerAction).Select(_ => Guid.NewGuid()).ToList();
+
+        _validator.TestValidate(Command("x", attachmentIds: ids)).ShouldNotHaveValidationErrorFor(x => x.AttachmentIds);
     }
 
     [Fact]

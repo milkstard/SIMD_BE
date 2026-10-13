@@ -167,7 +167,7 @@ public sealed class ReportIncidentTests(ApiFactory factory)
             severity = "High",
             title = "abc",
             description = new string('a', 20_001),
-            attachmentIds = new[] { Guid.NewGuid() },
+            attachmentIds = Enumerable.Range(0, 11).Select(_ => Guid.NewGuid()).ToArray(),
         };
 
         var response = await PostAsync(client, body);

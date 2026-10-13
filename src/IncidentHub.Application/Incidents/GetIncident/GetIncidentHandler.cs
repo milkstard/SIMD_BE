@@ -32,6 +32,7 @@ public sealed class GetIncidentHandler(
         }
 
         var extras = await IncidentProjections.DetailExtras(db, summary.Id).FirstAsync(cancellationToken);
-        return IncidentProjections.ToDetail(summary, extras, currentUser.ToActor());
+        var attachments = await IncidentProjections.IncidentAttachments(db, summary.Id, cancellationToken);
+        return IncidentProjections.ToDetail(summary, extras, attachments, currentUser.ToActor());
     }
 }

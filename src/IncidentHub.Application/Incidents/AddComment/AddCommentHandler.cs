@@ -1,10 +1,12 @@
 using FluentValidation;
 using FluentValidation.Results;
 using IncidentHub.Application.Abstractions;
+using IncidentHub.Application.Attachments;
 using IncidentHub.Application.Common;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Domain.Incidents;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace IncidentHub.Application.Incidents.AddComment;
@@ -41,22 +43,33 @@ public sealed class AddCommentHandler(
                 [new ValidationFailure("body", $"Body must be at most {Comment.BodyMaxLength} characters after sanitizing.")]);
         }
 
-        var comment = incident.AddComment(body, request.IsInternal, actor, time.GetUtcNow());
+        var attachments = await AttachmentLinker.LoadLinkableAsync(db, request.AttachmentIds, currentUser.UserId, cancellationToken);
+
+        var comment = incident.AddComment(body, request.IsInternal, actor, time.GetUtcNow(), attachments);
         db.Comments.Add(comment);
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException) when (attachments.Count > 0)
+        {
+            // Lost the race for one of the files (UPDATE ... WHERE IncidentId IS NULL); nothing was saved.
+            throw AttachmentLinker.Unavailable422();
+        }
 
         logger.LogInformation(
             "Comment {CommentId} added to incident {IncidentNumber}",
             comment.Id,
             new IncidentNumber(incident.Number));
 
+        var author = new UserRefDto(currentUser.UserId, currentUser.DisplayName, currentUser.Email);
         return new CommentDto(
             comment.Id,
             comment.IncidentId,
-            new UserRefDto(currentUser.UserId, currentUser.DisplayName, currentUser.Email),
+            author,
             comment.Body,
             comment.IsInternal,
-            [],
+            attachments.Select(a => AttachmentDto.From(a, author)).ToList(),
             comment.CreatedAt,
             comment.EditedAt);
     }

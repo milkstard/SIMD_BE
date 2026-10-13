@@ -61,7 +61,8 @@ internal static class AttachmentTestSupport
         ScanStatus status,
         byte[]? content = null,
         string fileName = "shot.png",
-        string contentType = "image/png")
+        string contentType = "image/png",
+        DateTimeOffset? createdAt = null)
     {
         content ??= Png;
         var id = Guid.NewGuid();
@@ -71,7 +72,7 @@ internal static class AttachmentTestSupport
         await scope.ServiceProvider.GetRequiredService<IFileStore>()
             .UploadAsync(path, new MemoryStream(content), contentType, CancellationToken.None);
 
-        var attachment = Attachment.Create(id, uploaderId, fileName, contentType, content.Length, path, DateTimeOffset.UtcNow);
+        var attachment = Attachment.Create(id, uploaderId, fileName, contentType, content.Length, path, createdAt ?? DateTimeOffset.UtcNow);
         if (status != ScanStatus.Pending)
         {
             attachment.MarkScanned(status);

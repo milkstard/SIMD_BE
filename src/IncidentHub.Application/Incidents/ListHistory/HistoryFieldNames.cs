@@ -21,6 +21,8 @@ internal static class HistoryFieldNames
         ["CloseReason"] = "Close reason",
         [Incident.CommentHistoryField] = "Comment",
         [Incident.InternalCommentHistoryField] = "Internal comment",
+        [Incident.AttachmentHistoryField] = "Attachment",
+        [Incident.InternalAttachmentHistoryField] = "Internal attachment",
     };
 
     public static string ToDisplayName(string field) => Names.TryGetValue(field, out var name) ? name : field;

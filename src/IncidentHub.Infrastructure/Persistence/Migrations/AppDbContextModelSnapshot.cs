@@ -101,6 +101,7 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(300)");
 
                     b.Property<Guid?>("IncidentId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("ScanAttempts")

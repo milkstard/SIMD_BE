@@ -2875,6 +2875,14 @@
           "isInternal": {
             "type": "boolean",
             "nullable": true
+          },
+          "attachmentIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nullable": true
           }
         },
         "additionalProperties": false

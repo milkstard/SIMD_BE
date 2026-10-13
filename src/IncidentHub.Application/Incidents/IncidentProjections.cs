@@ -89,11 +89,35 @@ internal static class IncidentProjections
     {
         var summary = await SummaryRows(db, db.Incidents.Where(i => i.Id == incidentId), IncidentPermissions.IsResponder(actor)).FirstAsync(cancellationToken);
         var extras = await DetailExtras(db, incidentId).FirstAsync(cancellationToken);
-        return ToDetail(summary, extras, actor);
+        var attachments = await IncidentAttachments(db, incidentId, cancellationToken);
+        return ToDetail(summary, extras, attachments, actor);
     }
 
-    // Attachments arrive with BE-08 part 3: none until then.
-    public static IncidentDetailDto ToDetail(SummaryRow row, DetailExtrasRow extras, Actor actor)
+    /// <summary>The files linked to the incident itself (those of a comment show on the comment), oldest first.</summary>
+    public static Task<List<AttachmentDto>> IncidentAttachments(IAppDbContext db, Guid incidentId, CancellationToken cancellationToken) =>
+        AttachmentRows(db, db.Attachments.Where(a => a.IncidentId == incidentId && a.CommentId == null))
+            .Select(r => r.Attachment)
+            .ToListAsync(cancellationToken);
+
+    /// <summary>Projects attachments to DTOs with their uploader, oldest first. The caller has already scoped <paramref name="attachments"/>.</summary>
+    public static IQueryable<AttachmentRow> AttachmentRows(IAppDbContext db, IQueryable<Attachment> attachments) =>
+        from a in attachments.AsNoTracking()
+        join u in db.Users.AsNoTracking() on a.UploadedById equals u.Id
+        orderby a.CreatedAt, a.Id
+        select new AttachmentRow(
+            a.CommentId,
+            new AttachmentDto(
+                a.Id,
+                a.FileName,
+                a.ContentType,
+                a.SizeBytes,
+                a.ScanStatus,
+                new UserRefDto(u.Id, u.DisplayName, u.Email),
+                a.CreatedAt));
+
+    public sealed record AttachmentRow(Guid? CommentId, AttachmentDto Attachment);
+
+    public static IncidentDetailDto ToDetail(SummaryRow row, DetailExtrasRow extras, IReadOnlyList<AttachmentDto> attachments, Actor actor)
     {
         var summary = ToSummary(row);
         return new IncidentDetailDto(
@@ -125,7 +149,7 @@ internal static class IncidentProjections
             extras.AcknowledgedAt,
             extras.ResolvedAt,
             extras.ClosedAt,
-            Attachments: [],
+            attachments,
             IncidentPermissions.AllowedTransitions(row.Status, row.Reporter.Id, row.Assignee?.Id, actor),
             IncidentPermissions.CanEdit(row.Status, row.Reporter.Id, actor),
             IncidentPermissions.CanAssign(row.Status, actor));

@@ -22,7 +22,8 @@ public sealed class ListHistoryHandler(
         var includeInternal = IncidentPermissions.IsResponder(currentUser.ToActor());
         var history = db.IncidentHistory.AsNoTracking()
             .Where(h => h.IncidentId == request.IncidentId
-                && (includeInternal || h.Field != Incident.InternalCommentHistoryField));
+                && (includeInternal
+                    || (h.Field != Incident.InternalCommentHistoryField && h.Field != Incident.InternalAttachmentHistoryField)));
 
         var total = request.IncludeTotal ? await history.CountAsync(cancellationToken) : (int?)null;
 

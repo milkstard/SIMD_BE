@@ -218,7 +218,7 @@ public sealed class IncidentsController(ISender sender) : ControllerBase
         CancellationToken cancellationToken)
     {
         var comment = await sender.Send(
-            new AddCommentCommand(id, request.Body ?? string.Empty, request.IsInternal ?? false),
+            new AddCommentCommand(id, request.Body ?? string.Empty, request.IsInternal ?? false, request.AttachmentIds ?? []),
             cancellationToken);
         return Created($"/api/v1/incidents/{id}/comments", comment);
     }
