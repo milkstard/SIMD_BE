@@ -21,6 +21,5 @@ internal static class IncidentPermissions
     public static bool CanAssign(IncidentStatus status, Actor actor) =>
         status != IncidentStatus.Closed && IsResponder(actor);
 
-    public static bool IsResponder(Actor actor) =>
-        actor.IsInRole(UserRole.Responder) || actor.IsInRole(UserRole.TeamLead) || actor.IsInRole(UserRole.Admin);
+    public static bool IsResponder(Actor actor) => IncidentWorkflow.IsResponder(actor);
 }

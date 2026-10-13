@@ -74,6 +74,42 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                     b.ToTable("Applications", (string)null);
                 });
 
+            modelBuilder.Entity("IncidentHub.Domain.Incidents.Comment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("EditedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("IncidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsInternal")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("IncidentId", "CreatedAt")
+                        .HasDatabaseName("IX_Comments_Incident_CreatedAt");
+
+                    b.ToTable("Comments", (string)null);
+                });
+
             modelBuilder.Entity("IncidentHub.Domain.Incidents.Incident", b =>
                 {
                     b.Property<Guid>("Id")
@@ -386,6 +422,21 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                     b.HasOne("IncidentHub.Domain.Teams.Team", null)
                         .WithMany()
                         .HasForeignKey("OwningTeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IncidentHub.Domain.Incidents.Comment", b =>
+                {
+                    b.HasOne("IncidentHub.Domain.Users.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IncidentHub.Domain.Incidents.Incident", null)
+                        .WithMany()
+                        .HasForeignKey("IncidentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

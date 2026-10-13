@@ -4,6 +4,7 @@ using IncidentHub.Api.IntegrationTests.Infrastructure;
 using IncidentHub.Application.Abstractions;
 using IncidentHub.Application.Incidents.FindSimilarIncidents;
 using IncidentHub.Domain.Apps;
+using IncidentHub.Domain.Users;
 using IncidentHub.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +37,7 @@ public sealed class FindSimilarIncidentsHandlerTests(ApiFactory factory)
 
         var user = Substitute.For<ICurrentUser>();
         user.UserId.Returns(userId);
+        user.ToActor().Returns(new Actor(userId, new HashSet<UserRole> { UserRole.Responder }));
         _teams.IsMemberAsync(userId, appId, Arg.Any<CancellationToken>()).Returns(isMember);
 
         return (scope, new FindSimilarIncidentsHandler(db, user, _teams, _search), appId);

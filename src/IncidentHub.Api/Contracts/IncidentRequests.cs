@@ -75,3 +75,6 @@ public sealed class ListIncidentsRequest
     [FromQuery(Name = "includeTotal")]
     public bool IncludeTotal { get; init; }
 }
+
+/// <summary>API-CONTRACT <c>AddCommentRequest</c>. A missing <c>isInternal</c> means a public comment.</summary>
+public sealed record AddCommentRequest(string? Body, bool? IsInternal);

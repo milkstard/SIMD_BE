@@ -51,7 +51,7 @@ public sealed class ListIncidentsHandler(
 
         var idArray = pageIds.ToArray();
         var projected = await IncidentProjections
-            .SummaryRows(db, db.Incidents.Where(i => idArray.Contains(i.Id)))
+            .SummaryRows(db, db.Incidents.Where(i => idArray.Contains(i.Id)), IncidentPermissions.IsResponder(currentUser.ToActor()))
             .ToListAsync(cancellationToken);
 
         var position = pageIds.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);

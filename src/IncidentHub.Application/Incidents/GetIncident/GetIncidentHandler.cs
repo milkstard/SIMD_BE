@@ -21,7 +21,7 @@ public sealed class GetIncidentHandler(
 
         var value = number.Value;
         var summary = await IncidentProjections
-            .SummaryRows(db, db.Incidents.Where(i => i.Number == value))
+            .SummaryRows(db, db.Incidents.Where(i => i.Number == value), IncidentPermissions.IsResponder(currentUser.ToActor()))
             .FirstOrDefaultAsync(cancellationToken);
 
         // Unknown and not-visible look the same.

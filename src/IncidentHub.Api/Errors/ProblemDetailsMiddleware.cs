@@ -76,6 +76,15 @@ public sealed class ProblemDetailsMiddleware(
                 Detail = exception.Message,
             });
         }
+        catch (CommentNotPermittedException exception) when (!context.Response.HasStarted)
+        {
+            await WriteAsync(context, new ProblemDetails
+            {
+                Status = StatusCodes.Status403Forbidden,
+                Title = "Internal comment not permitted",
+                Detail = exception.Message,
+            });
+        }
         catch (Exception exception) when (exception is InvalidTransitionException or IncidentClosedException && !context.Response.HasStarted)
         {
             await WriteAsync(context, new ProblemDetails

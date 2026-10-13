@@ -96,7 +96,15 @@ public sealed class AuthProbeController(
     public async Task<IActionResult> Broadcast(Guid applicationId, CommentRequest request)
     {
         var group = request.IsInternal ? HubGroups.Responders(applicationId) : HubGroups.App(applicationId);
-        var dto = new CommentDto(Guid.NewGuid(), "INC-1", request.Body, request.IsInternal, DateTimeOffset.UtcNow);
+        var dto = new CommentDto(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            new IncidentHub.Application.Common.UserRefDto(Guid.NewGuid(), "Probe", "probe@example.test"),
+            request.Body,
+            request.IsInternal,
+            [],
+            DateTimeOffset.UtcNow,
+            null);
         await hub.Clients.Group(group).CommentAdded(dto);
         return Ok();
     }

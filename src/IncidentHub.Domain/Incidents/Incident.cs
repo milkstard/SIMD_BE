@@ -17,6 +17,10 @@ public sealed class Incident : AggregateRoot
     public const int StepsMaxLength = 5_000;
     public const int NoteMaxLength = IncidentHistory.NoteMaxLength;
 
+    /// <summary>History <c>Field</c> values of a comment; internal ones are hidden from non-responders.</summary>
+    public const string CommentHistoryField = "Comment";
+    public const string InternalCommentHistoryField = "InternalComment";
+
     private readonly List<IncidentHistory> _history = [];
 
     private Incident()
@@ -172,6 +176,32 @@ public sealed class Incident : AggregateRoot
         }
 
         Raise(new IncidentTransitioned(Id, from, to, actorId, note, at));
+    }
+
+    /// <summary>
+    /// Adds a comment and records it in the history. Allowed on a closed incident; deliberately leaves
+    /// <see cref="UpdatedAt"/> alone so a comment never makes another editor's <c>If-Match</c> stale.
+    /// </summary>
+    /// <exception cref="CommentNotPermittedException">An internal comment by an actor that is not a responder.</exception>
+    public Comment AddComment(string body, bool isInternal, Actor actor, DateTimeOffset at)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(body);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(body.Length, Comment.BodyMaxLength);
+        if (actor.IsSystem)
+        {
+            throw new InvalidOperationException("Comments are written by users, not by the system.");
+        }
+
+        if (isInternal && !IncidentWorkflow.IsResponder(actor))
+        {
+            throw new CommentNotPermittedException();
+        }
+
+        var comment = Comment.Create(Id, actor.UserId, body, isInternal, at);
+        AddHistory(isInternal ? InternalCommentHistoryField : CommentHistoryField, null, comment.Id, null, actor.UserId, at);
+        Raise(new CommentAdded(Id, comment.Id, isInternal, actor.UserId, at));
+        return comment;
     }
 
     /// <summary>Replaces assignee and team. Does nothing (no history, no event) when neither changes.</summary>

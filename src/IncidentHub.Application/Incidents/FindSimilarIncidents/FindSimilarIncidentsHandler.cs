@@ -46,7 +46,7 @@ public sealed class FindSimilarIncidentsHandler(
 
         var idArray = ids.ToArray();
         var rows = await IncidentProjections
-            .SummaryRows(db, db.Incidents.Where(i => idArray.Contains(i.Id)))
+            .SummaryRows(db, db.Incidents.Where(i => idArray.Contains(i.Id)), IncidentPermissions.IsResponder(currentUser.ToActor()))
             .ToListAsync(cancellationToken);
 
         // The query above has no order; restore the rank order of the search.

@@ -110,6 +110,6 @@ public static class IncidentWorkflow
         || (who.HasFlag(Who.Reporter) && reporterId == actor.UserId);
 
     // TeamLead and Admin act as Responder in the workflow (decided for spec 04_01). Team membership is an Api check.
-    private static bool IsResponder(Actor actor) =>
+    public static bool IsResponder(Actor actor) =>
         actor.IsInRole(UserRole.Responder) || actor.IsInRole(UserRole.TeamLead) || actor.IsInRole(UserRole.Admin);
 }

@@ -29,6 +29,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<IncidentHistory> IncidentHistory => Set<IncidentHistory>();
 
+    public DbSet<Comment> Comments => Set<Comment>();
+
     /// <summary>Written only by this context (see <see cref="StageOutbox"/>); deliberately not on <see cref="IAppDbContext"/>.</summary>
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 

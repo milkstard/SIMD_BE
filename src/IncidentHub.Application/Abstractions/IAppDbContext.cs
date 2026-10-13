@@ -22,5 +22,7 @@ public interface IAppDbContext
     /// <summary>Append-only audit rows; read them through <see cref="Incident.History"/> or query directly for paging.</summary>
     DbSet<IncidentHistory> IncidentHistory { get; }
 
+    DbSet<Comment> Comments { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

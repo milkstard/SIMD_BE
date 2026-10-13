@@ -14,7 +14,7 @@ internal static class IncidentProjections
     /// Projects incidents straight to <see cref="IncidentSummaryDto"/> rows without loading aggregates. <see cref="Incident"/> has no
     /// navigations, so refs are joined by key; filter <paramref name="incidents"/> before passing it in. Number and RowVersion are formatted by <see cref="ToSummary"/> after materialising.
     /// </summary>
-    public static IQueryable<SummaryRow> SummaryRows(IAppDbContext db, IQueryable<Incident> incidents) =>
+    public static IQueryable<SummaryRow> SummaryRows(IAppDbContext db, IQueryable<Incident> incidents, bool includeInternalComments) =>
         from i in incidents.AsNoTracking()
         join a in db.Applications.AsNoTracking() on i.ApplicationId equals a.Id
         join r in db.Users.AsNoTracking() on i.ReporterId equals r.Id
@@ -39,9 +39,9 @@ internal static class IncidentProjections
             i.AckDueAt,
             i.ResolveDueAt,
             i.IsSlaBreached,
+            db.Comments.Count(c => c.IncidentId == i.Id && (includeInternalComments || !c.IsInternal)),
             i.RowVersion);
 
-    // Comments arrive with BE-08, so the count is 0 until then.
     public static IncidentSummaryDto ToSummary(SummaryRow row) =>
         new(
             row.Id,
@@ -60,7 +60,7 @@ internal static class IncidentProjections
             row.AckDueAt,
             row.ResolveDueAt,
             row.IsSlaBreached,
-            CommentCount: 0,
+            row.CommentCount,
             Convert.ToBase64String(row.RowVersion));
 
     /// <summary>The detail-only columns of one incident (the summary columns come from <see cref="SummaryRows"/>).</summary>
@@ -87,12 +87,12 @@ internal static class IncidentProjections
         Actor actor,
         CancellationToken cancellationToken)
     {
-        var summary = await SummaryRows(db, db.Incidents.Where(i => i.Id == incidentId)).FirstAsync(cancellationToken);
+        var summary = await SummaryRows(db, db.Incidents.Where(i => i.Id == incidentId), IncidentPermissions.IsResponder(actor)).FirstAsync(cancellationToken);
         var extras = await DetailExtras(db, incidentId).FirstAsync(cancellationToken);
         return ToDetail(summary, extras, actor);
     }
 
-    // Comments and attachments arrive with BE-08: count 0 and no attachments until then.
+    // Attachments arrive with BE-08 part 3: none until then.
     public static IncidentDetailDto ToDetail(SummaryRow row, DetailExtrasRow extras, Actor actor)
     {
         var summary = ToSummary(row);
@@ -159,5 +159,6 @@ internal static class IncidentProjections
         DateTimeOffset? AckDueAt,
         DateTimeOffset? ResolveDueAt,
         bool IsSlaBreached,
+        int CommentCount,
         byte[] RowVersion);
 }

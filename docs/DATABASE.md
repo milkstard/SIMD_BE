@@ -135,7 +135,7 @@ Append-only audit trail. Never updated or deleted.
 |---|---|---|
 | `Id` | `uniqueidentifier` | PK |
 | `IncidentId` | `uniqueidentifier` | FK → `Incidents.Id`, not null |
-| `Field` | `nvarchar(50)` | the entity property name, e.g. `Status`, `Severity`, `AssigneeId`; the API maps it to a display name |
+| `Field` | `nvarchar(50)` | the entity property name, e.g. `Status`, `Severity`, `AssigneeId`; the API maps it to a display name. `Comment` / `InternalComment` mark a new comment (`NewValue` = comment id); `InternalComment` rows are hidden from non-responders |
 | `OldValue` | `nvarchar(max)` | nullable |
 | `NewValue` | `nvarchar(max)` | nullable |
 | `Note` | `nvarchar(1000)` | nullable — optional note on a transition |

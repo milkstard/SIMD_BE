@@ -2,10 +2,13 @@ using IncidentHub.Api.Auth;
 using IncidentHub.Api.Contracts;
 using IncidentHub.Api.Filters;
 using IncidentHub.Application.Common.Paging;
+using IncidentHub.Application.Incidents.AddComment;
 using IncidentHub.Application.Incidents.AssignIncident;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Application.Incidents.FindSimilarIncidents;
 using IncidentHub.Application.Incidents.GetIncident;
+using IncidentHub.Application.Incidents.ListComments;
+using IncidentHub.Application.Incidents.ListHistory;
 using IncidentHub.Application.Incidents.ListIncidents;
 using IncidentHub.Application.Incidents.ReportIncident;
 using IncidentHub.Application.Incidents.TransitionIncident;
@@ -24,6 +27,9 @@ public sealed class IncidentsController(ISender sender) : ControllerBase
 {
     // Description (20k) + steps (5k) characters plus JSON overhead, with headroom for multi-byte text.
     private const int MaxRequestBytes = 256 * 1024;
+
+    // A comment body is at most 10,000 characters; JSON escaping of markup can multiply that several times.
+    private const int MaxCommentRequestBytes = 128 * 1024;
 
     [HttpPost]
     [Authorize(Policy = Policies.CanReportIncident)]
@@ -179,6 +185,57 @@ public sealed class IncidentsController(ISender sender) : ControllerBase
         [FromBody] UpdateIncidentRequest request,
         CancellationToken cancellationToken) =>
         Ok(await sender.Send(request.ToCommand(id, HttpContext.GetIfMatchRowVersion()), cancellationToken));
+
+    [HttpGet("{id:guid}/comments")]
+    [Authorize(Policy = Policies.CanViewIncident)]
+    [ProducesResponseType<Paged<CommentDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<Paged<CommentDto>>> ListComments(
+        Guid id,
+        [FromQuery] string? cursor,
+        CancellationToken cancellationToken,
+        [FromQuery] int limit = PageLimits.Default,
+        [FromQuery] bool includeTotal = false) =>
+        Ok(await sender.Send(new ListCommentsQuery(id, cursor, limit, includeTotal), cancellationToken));
+
+    // Whether an internal comment is allowed depends on the caller's role, so the handler decides (403), not the policy.
+    [HttpPost("{id:guid}/comments")]
+    [Authorize(Policy = Policies.CanViewIncident)]
+    [Idempotent]
+    [RequestSizeLimit(MaxCommentRequestBytes)]
+    [ProducesResponseType<CommentDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CommentDto>> AddComment(
+        Guid id,
+        [FromBody] AddCommentRequest request,
+        CancellationToken cancellationToken)
+    {
+        var comment = await sender.Send(
+            new AddCommentCommand(id, request.Body ?? string.Empty, request.IsInternal ?? false),
+            cancellationToken);
+        return Created($"/api/v1/incidents/{id}/comments", comment);
+    }
+
+    [HttpGet("{id:guid}/history")]
+    [Authorize(Policy = Policies.CanViewIncident)]
+    [ProducesResponseType<Paged<HistoryEntryDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<Paged<HistoryEntryDto>>> ListHistory(
+        Guid id,
+        [FromQuery] string? cursor,
+        CancellationToken cancellationToken,
+        [FromQuery] int limit = PageLimits.Default,
+        [FromQuery] bool includeTotal = false) =>
+        Ok(await sender.Send(new ListHistoryQuery(id, cursor, limit, includeTotal), cancellationToken));
 
     private static bool TryParseSort(string? token, out IncidentSort sort)
     {
