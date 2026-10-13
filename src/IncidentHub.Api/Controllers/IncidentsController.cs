@@ -2,11 +2,13 @@ using IncidentHub.Api.Auth;
 using IncidentHub.Api.Contracts;
 using IncidentHub.Api.Filters;
 using IncidentHub.Application.Common.Paging;
+using IncidentHub.Application.Incidents.AssignIncident;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Application.Incidents.FindSimilarIncidents;
 using IncidentHub.Application.Incidents.GetIncident;
 using IncidentHub.Application.Incidents.ListIncidents;
 using IncidentHub.Application.Incidents.ReportIncident;
+using IncidentHub.Application.Incidents.TransitionIncident;
 using IncidentHub.Domain.Apps;
 using IncidentHub.Domain.Incidents;
 using MediatR;
@@ -112,6 +114,50 @@ public sealed class IncidentsController(ISender sender) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IncidentDetailDto>> Get(string number, CancellationToken cancellationToken) =>
         Ok(await sender.Send(new GetIncidentQuery(number), cancellationToken));
+
+    [HttpPost("{id:guid}/transitions")]
+    [Authorize(Policy = Policies.CanTransitionIncident)]
+    [RequireIfMatch]
+    [ProducesResponseType<IncidentDetailDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    public async Task<ActionResult<IncidentDetailDto>> Transition(
+        Guid id,
+        [FromBody] TransitionRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await sender.Send(
+            new TransitionIncidentCommand(
+                id,
+                request.To ?? (IncidentStatus)(-1),
+                request.Note,
+                request.CloseReason,
+                request.DuplicateOfId,
+                HttpContext.GetIfMatchRowVersion()),
+            cancellationToken));
+
+    [HttpPost("{id:guid}/assignment")]
+    [Authorize(Policy = Policies.CanAssignIncident)]
+    [RequireIfMatch]
+    [ProducesResponseType<IncidentDetailDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    public async Task<ActionResult<IncidentDetailDto>> Assign(
+        Guid id,
+        [FromBody] AssignRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await sender.Send(
+            new AssignIncidentCommand(id, request.AssigneeId, request.TeamId, HttpContext.GetIfMatchRowVersion()),
+            cancellationToken));
 
     private static bool TryParseSort(string? token, out IncidentSort sort)
     {

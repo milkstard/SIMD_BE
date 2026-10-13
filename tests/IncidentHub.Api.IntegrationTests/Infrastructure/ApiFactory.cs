@@ -147,6 +147,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         return app.Id;
     }
 
+    /// <summary>Creates a team that owns no application; returns its id.</summary>
+    public async Task<Guid> CreateTeamAsync()
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var suffix = Guid.NewGuid().ToString("N");
+        var team = Team.Create($"team-{suffix}", $"{suffix}@test.local", null);
+        db.Teams.Add(team);
+        await db.SaveChangesAsync();
+        return team.Id;
+    }
+
     /// <summary>Makes the user (identified by Entra object id) a member of the application's owning team.</summary>
     public async Task AddToTeamAsync(string objectId, Guid applicationId)
     {

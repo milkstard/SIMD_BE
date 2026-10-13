@@ -16,6 +16,16 @@ public sealed record ReportIncidentRequest(
     string? StepsToReproduce,
     List<Guid>? AttachmentIds);
 
+/// <summary>Body of <c>POST /incidents/{id}/transitions</c>. A missing <c>to</c> reaches the validator (422) instead of a model-binding 400.</summary>
+public sealed record TransitionRequest(
+    IncidentStatus? To,
+    string? Note,
+    CloseReason? CloseReason,
+    Guid? DuplicateOfId);
+
+/// <summary>Body of <c>POST /incidents/{id}/assignment</c>. Replaces both fields: <c>null</c> clears one.</summary>
+public sealed record AssignRequest(Guid? AssigneeId, Guid? TeamId);
+
 /// <summary>Query string of <c>GET /incidents</c>. Repeatable <c>status</c>/<c>severity</c>; unknown enum names or sort tokens fail binding (400).</summary>
 public sealed class ListIncidentsRequest
 {

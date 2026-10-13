@@ -1,6 +1,6 @@
 # Spec 07_02: Incident transition & assignment
 
-> Status: **Draft** · Source: BE-07 in docs/BACKEND-SPECS.md · Part 02 of 03
+> Status: **Implemented** · Source: BE-07 in docs/BACKEND-SPECS.md · Part 02 of 03
 
 ## 1. Purpose & scope
 
@@ -72,15 +72,15 @@ None.
 
 ## 5. Acceptance criteria
 
-- [ ] Each allowed transition for a permitted caller returns `200`, the new `status`, a new `rowVersion`/`ETag`, an updated `allowedTransitions`, and one `Status` history row (old → new, note, actor, time).
-- [ ] A move not in the table → `409` (`invalid-transition`); a listed move the caller may not make → `403` with title "Transition not permitted"; missing `note` (Resolved, Reopened), `closeReason` (Closed) or `duplicateOfId` (Duplicate) → `422` with camelCase keys.
-- [ ] Stale `If-Match` → `409` with the entity unchanged; missing → `428`; malformed → `400`. Two concurrent writers with the same ETag: exactly one succeeds.
-- [ ] Incident row, history rows and the outbox row for the event are written by one `SaveChangesAsync` (rollback verified: an induced failure leaves none of them).
-- [ ] `AcknowledgedAt`, `ResolvedAt`, `ClosedAt`, `CloseReason`, `DuplicateOfId` are set as specified in 04_01 and visible in the response.
-- [ ] Assignment sets/clears assignee and team, appends one history row per changed field, `200` with the refreshed detail; assigning the same values is a no-op without history; closed incident → `409`.
-- [ ] Reporter-only role and non-Responders calling `/assignment` → `403` (policy); unknown assignee/team or assignee outside the application's team → `422` on `assigneeId`/`teamId`.
-- [ ] A caller outside the application's team gets `404` on both endpoints and nothing changes.
-- [ ] Controller maps only; handlers use `TimeProvider`; `API-CONTRACT.md` and `swagger.json` updated; build + `dotnet format` clean.
+- [x] Each allowed transition for a permitted caller returns `200`, the new `status`, a new `rowVersion`/`ETag`, an updated `allowedTransitions`, and one `Status` history row (old → new, note, actor, time).
+- [x] A move not in the table → `409` (`invalid-transition`); a listed move the caller may not make → `403` with title "Transition not permitted"; missing `note` (Resolved, Reopened), `closeReason` (Closed) or `duplicateOfId` (Duplicate) → `422` with camelCase keys.
+- [x] Stale `If-Match` → `409` with the entity unchanged; missing → `428`; malformed → `400`. Two concurrent writers with the same ETag: exactly one succeeds.
+- [x] Incident row, history rows and the outbox row for the event are written by one `SaveChangesAsync` (rollback verified: an induced failure leaves none of them).
+- [x] `AcknowledgedAt`, `ResolvedAt`, `ClosedAt`, `CloseReason`, `DuplicateOfId` are set as specified in 04_01 and visible in the response.
+- [x] Assignment sets/clears assignee and team, appends one history row per changed field, `200` with the refreshed detail; assigning the same values is a no-op without history; closed incident → `409`.
+- [x] Reporter-only role and non-Responders calling `/assignment` → `403` (policy); unknown assignee/team or assignee outside the application's team → `422` on `assigneeId`/`teamId`.
+- [x] A caller outside the application's team gets `404` on both endpoints and nothing changes.
+- [x] Controller maps only; handlers use `TimeProvider`; `API-CONTRACT.md` and `swagger.json` updated; build + `dotnet format` clean.
 
 ## 6. Test plan
 
@@ -101,12 +101,15 @@ None.
 - SLA breach and escalation transitions by the system → BE-12.
 - Comments on transition → BE-08.
 
-## 8. Open questions
+## 8. Decisions
 
-All proposals; confirm before implementing.
+Decided with the user on 2026-10-13:
 
-1. **Non-members.** API-CONTRACT §6 says 403 for "role or team not allowed" and 404 for "not found or not visible". Proposal: a caller outside the application's team gets `404` for the by-id writes (existence not leaked, consistent with 07_01 detail). Alternative: `403`.
-2. **Assignment rules.** BACKEND-SPECS says only "assign to user or team". Proposal: the assignee must be a member of the incident's application team, and `teamId` must exist (any team); cross-team assignment is rejected with `422`. Also: may a Responder assign to someone else, or only to themselves? Proposal: any Responder/TeamLead/Admin may assign to any eligible member (policy `CanAssignIncident` already requires Responder+).
-3. **Outbox rows.** 05_01 maps only `IncidentReported`. Proposal: also write rows for `IncidentTransitioned` and `IncidentAssigned` now (the table and dispatcher design expect every domain event, and BE-10/13/14 will consume them). Alternative: defer the new event types to BE-10 (add a deferred item).
-4. **`If-Match` on no-op assignment.** An assignment that changes nothing still validates `If-Match` and returns `200` with the current ETag. Confirm.
-5. **System transitions** (`Actor.System`) are not available through the API; confirmed by the workflow (system is never allowed a user transition).
+1. **Non-members** get `404` on both endpoints (Admin included), the same response as an unknown id.
+2. **Assignee** must be a member of the incident's application's owning team (any team role); an unknown user or non-member is `422` on `assigneeId`. `teamId` may be any existing team; an unknown team is `422` on `teamId`. Any Responder/TeamLead/Admin may assign to any eligible member.
+3. **`duplicateOfId`** must exist, differ from the incident and belong to an application the caller can see; otherwise `422` on `duplicateOfId`.
+4. **Outbox rows** for `IncidentTransitioned` / `IncidentAssigned` are written now. `AppDbContext.StageOutbox` already maps every domain event generically, so no Infrastructure change is needed; the endpoint tests prove it.
+5. A no-op assignment still validates `If-Match` and returns `200` with the unchanged detail and ETag.
+6. System transitions (`Actor.System`) are not reachable through the API.
+
+Implementation notes: `IAppDbContext` has no `Entry`, so the stale-write check compares the loaded `RowVersion` with `If-Match` (as `UpdateTeamHandler` does); a writer that commits between load and save makes the `UPDATE` fail with `DbUpdateConcurrencyException` (409). The rollback test uses such a real concurrent save instead of a faulty interceptor.

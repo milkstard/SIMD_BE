@@ -80,6 +80,18 @@ internal static class IncidentProjections
             duplicate == null ? null : duplicate.Id,
             duplicate == null ? null : (int?)duplicate.Number);
 
+    /// <summary>Reads one incident's detail for <paramref name="actor"/>; the caller has already checked visibility.</summary>
+    public static async Task<IncidentDetailDto> LoadDetailAsync(
+        IAppDbContext db,
+        Guid incidentId,
+        Actor actor,
+        CancellationToken cancellationToken)
+    {
+        var summary = await SummaryRows(db, db.Incidents.Where(i => i.Id == incidentId)).FirstAsync(cancellationToken);
+        var extras = await DetailExtras(db, incidentId).FirstAsync(cancellationToken);
+        return ToDetail(summary, extras, actor);
+    }
+
     // Comments and attachments arrive with BE-08: count 0 and no attachments until then.
     public static IncidentDetailDto ToDetail(SummaryRow row, DetailExtrasRow extras, Actor actor)
     {
