@@ -38,7 +38,9 @@ builder.Services.AddControllers(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddIncidentHubSwagger(builder.Configuration);
 
-builder.Services.AddSignalR().AddStackExchangeRedis(options =>
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()))
+    .AddStackExchangeRedis(options =>
 {
     options.Configuration = ConfigurationOptions.Parse(IncidentHub.Infrastructure.DependencyInjection.RequireConnectionString(builder.Configuration, "Redis"));
     options.Configuration.AbortOnConnectFail = false;

@@ -204,6 +204,22 @@ public sealed class CatalogPersistenceTests(ApiFactory factory)
         ids.Should().BeEquivalentTo([firstId, secondId]);
     }
 
+    [Fact]
+    public async Task GetTeamIdsForUserAsync_ReturnsOnlyOwnTeams()
+    {
+        var (ownApp, ownTeam) = await SeedAsync([AppEnvironment.Production]);
+        await SeedAsync([AppEnvironment.Production]);
+        var oid = Guid.NewGuid().ToString();
+        await factory.AddToTeamAsync(oid, ownApp);
+        var userId = await EnsureUserAsync(oid);
+
+        using var scope = factory.Services.CreateScope();
+        var ids = await scope.ServiceProvider.GetRequiredService<IAppTeamReader>()
+            .GetTeamIdsForUserAsync(userId, CancellationToken.None);
+
+        ids.Should().BeEquivalentTo([ownTeam]);
+    }
+
     private static string Unique(string prefix) => $"{prefix}-{Guid.NewGuid():N}";
 
     private AppDbContext NewIsolatedContext() =>

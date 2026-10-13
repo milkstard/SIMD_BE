@@ -247,9 +247,9 @@ public sealed record TransitionRequest(
 | PATCH | `/incidents/{id}` | `UpdateIncidentRequest` | `200` `IncidentDetail` + new `ETag` | `If-Match` required (`428` missing, `400` malformed, `409` stale). `404` when the incident is unknown or belongs to an application of another team (Admin included). Responders (Responder, TeamLead, Admin) may change any field; the incident's reporter may change only `title`, `description` and `stepsToReproduce` (`403` for `severity`, `priority`, `applicationId`, `environment`, and for any other caller). Only the fields sent change; `null` is meaningful only for `stepsToReproduce` and `priority` (clears them), `null` on any other field and an empty body are `422`. `severity` needs a `reason` (`422`); `reason` without `severity` is ignored; a severity equal to the current one changes nothing. A severity change restarts the SLA clock: `ackDueAt`/`resolveDueAt` are counted from the time of the change. `applicationId` needs membership of the target application's team and an active application (`422` on `applicationId`), `environment` must be offered by the target application (`422` on `environment`); assignee and assigned team are kept on a move. A closed incident is `409` (`.../invalid-transition`); a new title/application that matches another open incident is `409` "Duplicate incident" with `existingIncidentNumber`. Body limit 256 KiB (`413`) |
 | POST | `/incidents/{id}/transitions` | `TransitionRequest` | `200` `IncidentDetail` + new `ETag` | `If-Match` required (`428` missing, `400` malformed, `409` stale). `404` when the incident is unknown or belongs to an application of another team (Admin included). A move not in the workflow table is `409`, a listed move the caller may not make `403`, a missing `note`/`closeReason`/`duplicateOfId` or a missing `to` `422`. `duplicateOfId` must be a different incident of an application the caller can see, otherwise `422` on `duplicateOfId` |
 | POST | `/incidents/{id}/assignment` | `AssignRequest` | `200` `IncidentDetail` + new `ETag` | `If-Match` required; Responder, TeamLead or Admin of the application's team (`403` for Reporters, `404` for non-members). The body replaces both fields (`null` clears one). `assigneeId` must belong to the application's owning team (`422` otherwise or if unknown); `teamId` may be any existing team (`422` if unknown). Assigning the current values changes nothing and returns `200` with the same `ETag`; a closed incident is `409` |
-| GET | `/incidents/{id}/comments` | — | `200` `Paged<Comment>` | Oldest first |
-| POST | `/incidents/{id}/comments` | `AddCommentRequest` | `201` `Comment` | |
-| GET | `/incidents/{id}/history` | — | `200` `Paged<HistoryEntry>` | Newest first |
+| GET | `/incidents/{id}/comments?cursor=&limit=25&includeTotal=false` | — | `200` `Paged<Comment>` | Oldest first. `404` when the incident is unknown or belongs to an application of another team (Admin included). `422` for a `limit` outside 1-100 or a bad `cursor`. Reporters never receive an internal comment, nor count it in `totalCount`. `attachments` is `[]` until BE-08 part 3 |
+| POST | `/incidents/{id}/comments` | `AddCommentRequest` | `201` `Comment`, `Location` (the comments list) | `Idempotency-Key` honoured; body limit 128 KiB (`413`). Allowed on a closed incident. `isInternal: true` is `403` (title "Internal comment not permitted") unless the caller is a Responder, TeamLead or Admin; a missing `isInternal` means `false`. `422` for an empty body (also when nothing is left after sanitizing) or one over 10,000 characters, and for an `Idempotency-Key` reused with another body. `404` as for the list. A comment does not change the incident's `updatedAt` or `ETag` |
+| GET | `/incidents/{id}/history?cursor=&limit=25&includeTotal=false` | — | `200` `Paged<HistoryEntry>` | Newest first. `404` and `422` as for comments. `field` is a display name (`Assignee`, `Team`, `Application`, `Duplicate of`, `Steps to reproduce`, `SLA breached`, `Close reason`, `Comment`, `Internal comment`; others unchanged). `oldValue`/`newValue` of `Assignee`, `Team`, `Application` and `Duplicate of` are names (users, teams, applications) or incident numbers; a value whose row no longer exists is returned as the stored id. A comment adds a `Comment` row whose `newValue` is the comment id; the `Internal comment` rows are returned to Responders, TeamLead and Admin only (so are their share of `totalCount`) |
 | GET | `/incidents/similar?applicationId=&title=` | — | `200` `IncidentSummary[]` (max 5) | Open incidents of that application only, best title match first. Caller must belong to the application's owning team (Admin included), otherwise `422` on `applicationId` (also for unknown/inactive applications); missing `applicationId`/`title` or a title over 200 chars is `422`, a non-GUID `applicationId` is `400`. A title shorter than 3 characters returns `[]`. A just-reported incident can take a few seconds to appear (asynchronous full-text indexing) |
 
 `GET /incidents` query parameters (all optional, repeatable where plural):
@@ -429,22 +429,24 @@ Strongly typed on the server (`Hub<IIncidentClient>`). Method names below are ex
 
 | Method | Args | Effect |
 |---|---|---|
-| `JoinDashboard` | — | Join `dashboard` group |
-| `LeaveDashboard` | — | Leave it |
-| `WatchIncident` | `incidentId: string` | Join `incident:{id}` (access checked) |
+| `JoinDashboard` | — | Join `dashboard:{teamId}` for every team the caller belongs to |
+| `LeaveDashboard` | — | Leave them |
+| `WatchIncident` | `incidentId: string` | Join `incident:{id}` (access checked). An unknown incident and one of another team fail alike with a `HubException` "Incident not found." |
 | `UnwatchIncident` | `incidentId: string` | Leave it |
 
-Every connection is automatically in `user:{userId}`, and Responders in `responders:{teamId}`.
+Every connection is automatically in `user:{userId}` and in `team:{teamId}` for each of its teams; Responder, TeamLead and Admin tokens are also in
+`responders:{teamId}`. Team groups are computed when the connection starts: a membership change applies after the client reconnects
+(or its token expires, which closes the connection). Enums in payloads are serialized as strings, like in REST.
 
 ### Server → client
 
 | Event | Payload | Sent to |
 |---|---|---|
-| `IncidentCreated` | `IncidentSummary` | `dashboard`, owning team |
-| `IncidentUpdated` | `IncidentSummary` | `dashboard`, `incident:{id}`, team |
-| `CommentAdded` | `{ incidentId: string; comment: Comment }` | `incident:{id}` (internal comments: responders only) |
-| `AppStatusChanged` | `AppStatusItem` | `dashboard` |
-| `DashboardChanged` | `DashboardSummary` | `dashboard` (max 1 per second) |
+| `IncidentCreated` | `IncidentSummary` | `dashboard:{teamId}`, `team:{teamId}` of the owning team |
+| `IncidentUpdated` | `IncidentSummary` | `dashboard:{teamId}`, `incident:{id}`, `team:{teamId}` |
+| `CommentAdded` | `{ incidentId: string; comment: Comment }` | `incident:{id}` (internal comments: `responders:{teamId}` only) |
+| `AppStatusChanged` | `AppStatusItem` | `dashboard:{teamId}` |
+| `DashboardChanged` | `DashboardSummary` | `dashboard:{teamId}` (max 1 per second) |
 | `NotificationReceived` | `AppNotification` | `user:{userId}` |
 
 ```csharp

@@ -46,6 +46,17 @@ public sealed class RedisAppTeamReader(AppDbContext db, IConnectionMultiplexer r
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Guid>> GetTeamIdsForUserAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        using var activity = InfrastructureTelemetry.Source.StartActivity("team.teams_for_user");
+        return await db.TeamMembers
+            .AsNoTracking()
+            .Where(m => m.UserId == userId)
+            .Select(m => m.TeamId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task InvalidateAsync(Guid userId, Guid applicationId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

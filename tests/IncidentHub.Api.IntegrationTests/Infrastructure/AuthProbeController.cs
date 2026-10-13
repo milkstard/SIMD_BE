@@ -1,6 +1,7 @@
 using IncidentHub.Api.Auth;
 using IncidentHub.Api.Hubs;
 using IncidentHub.Application.Abstractions;
+using IncidentHub.Application.Common;
 using IncidentHub.Application.Incidents.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -17,8 +18,6 @@ public sealed class AuthProbeController(
     ICurrentUser currentUser,
     IHubContext<IncidentsHub, IIncidentClient> hub) : ControllerBase
 {
-    public sealed record CommentRequest(string Body, bool IsInternal);
-
     public sealed record MeResponse(string EntraObjectId, string[] Roles);
 
     /// <summary>No attribute: only the fallback policy applies.</summary>
@@ -88,24 +87,16 @@ public sealed class AuthProbeController(
             : Problem(statusCode: StatusCodes.Status403Forbidden, title: "Forbidden");
 
     /// <summary>
-    /// Stand-in for the future AddComment broadcast: internal comments go to the responders group only,
-    /// public ones to the whole team group. Exercises the hub's group membership rules.
+    /// Sends a <c>CommentAdded</c> marker (<c>IncidentId</c> = <paramref name="marker"/>) to a raw hub group, so tests can
+    /// tell which connections are members of it.
     /// </summary>
-    [HttpPost("apps/{applicationId:guid}/comments")]
+    [HttpPost("hub/groups/{group}")]
     [AllowAnonymous]
-    public async Task<IActionResult> Broadcast(Guid applicationId, CommentRequest request)
+    public async Task<IActionResult> SendToGroup(string group, [FromQuery] Guid marker)
     {
-        var group = request.IsInternal ? HubGroups.Responders(applicationId) : HubGroups.App(applicationId);
-        var dto = new CommentDto(
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            new IncidentHub.Application.Common.UserRefDto(Guid.NewGuid(), "Probe", "probe@example.test"),
-            request.Body,
-            request.IsInternal,
-            [],
-            DateTimeOffset.UtcNow,
-            null);
-        await hub.Clients.Group(group).CommentAdded(dto);
+        var user = new UserRefDto(Guid.Empty, "probe", "probe@test.local");
+        var comment = new CommentDto(Guid.NewGuid(), marker, user, "probe", false, [], DateTimeOffset.UtcNow, null);
+        await hub.Clients.Group(group).CommentAdded(new CommentAddedEvent(marker, comment));
         return Ok();
     }
 }

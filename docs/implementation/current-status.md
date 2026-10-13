@@ -8,21 +8,53 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 | Field | Value |
 |---|---|
 | Spec | `docs/specs/09_01_hub-groups-and-access.md` (BE-09, part 1 of 2) |
-| State | In progress <!-- Planned · In progress · Blocked · Done --> |
+| State | Done <!-- Planned · In progress · Blocked · Done --> |
 | Started | 2026-10-13 |
 | Last updated | 2026-10-13 |
 | Branch / commit | main / `24d65aa` (07_03 and 08_01 work is still uncommitted in the tree) |
 
 ### Progress
-- [ ] Docs/tracking: spec decisions
-- [ ] Application: `IAppTeamReader.GetTeamIdsForUserAsync`, `CanWatchIncident` query, hub payload DTOs
-- [ ] Infrastructure: `RedisAppTeamReader.GetTeamIdsForUserAsync`
-- [ ] Api: `IIncidentClient` (6 methods), `HubGroups`, `IncidentsHub` rewrite
-- [ ] API-CONTRACT.md §7
-- [ ] Tests: hub groups/watch, probe rewrite, handler, validator, client contract
+- [x] Docs/tracking: spec decisions (09_01 §8, `GetOwningTeamIdAsync` moved to 09_02)
+- [x] Application: `IAppTeamReader.GetTeamIdsForUserAsync`, `CanWatchIncident` query/validator/handler, hub payload DTOs (`AppStatusItemDto`, `DashboardSummaryDto`, `NotificationDto`, `CommentAddedEvent`) and `AppStatus`/`NotificationType` enums
+- [x] Infrastructure: `RedisAppTeamReader.GetTeamIdsForUserAsync`
+- [x] Api: `IIncidentClient` (6 methods), `HubGroups`, `IncidentsHub` rewrite, hub JSON protocol with string enums
+- [x] API-CONTRACT.md §7
+- [x] Tests written: `IncidentsHubTests` (replaces `IncidentsHubAuthTests`), probe rewrite, `CanWatchIncidentHandlerTests`, `GetTeamIdsForUserAsync_ReturnsOnlyOwnTeams`, validator and client-contract unit tests
+- [x] Integration run with Docker
+
+### Verification
+- `dotnet build` (whole solution): 0 warnings, 0 errors.
+- Unit tests (`Category!=Integration`): Domain 369, Application 169, Api.UnitTests 75 passed, 0 failed.
+- Full suite with Docker (`Category!=Performance`): 397 of 399 integration tests pass, including all new hub tests (`IncidentsHubTests`, `CanWatchIncidentHandlerTests`, `GetTeamIdsForUserAsync_ReturnsOnlyOwnTeams`). Two failures belong to the uncommitted 08_01 work, not 09_01: `CommentTests.Add_BodyOverRequestCap_Returns413` (gets 422) and `FindSimilarIncidentsHandlerTests.Handle_Matches_ReturnsSummariesInRankOrder` (NullReferenceException in `IncidentWorkflow.IsResponder`: the test's substitute `ICurrentUser` returns null `Roles` since the handler now checks the responder role).
+- `dotnet format --verify-no-changes` reports CHARSET/IDE0161 only in `Migrations/20261013081549_AddComments.cs` (08_01 work, not this spec); the 09_01 files are clean.
 
 ### Blockers / open questions
 None. Decided 2026-10-13: `dashboard:{teamId}` + `team:{teamId}` groups; stale membership accepted until reconnect; responder groups follow the token role; `GetOwningTeamIdAsync` moves to 09_02.
+
+### Previous implementation (08_01)
+Done, review pending (`/review-spec`). `GET/POST /incidents/{id}/comments`, `GET /incidents/{id}/history`, `Comment` entity + `AddComments` migration, real `commentCount`.
+- Verification: `dotnet build` 0 warnings; `dotnet test --filter Category!=Performance` with Docker: Domain 369, Application 169, Api.UnitTests 75, Api.IntegrationTests 399 passed, 0 failed; opt-in plan tests pass (`ListIncidentsQueryPlanTests`, new `CommentsQueryPlanTests` seeks `IX_Comments_Incident_CreatedAt`); `dotnet format --verify-no-changes` clean; `contracts/swagger.json` regenerated (additive).
+- Decisions: see spec 08_01 §8 (history row per comment with `InternalComment` hidden from non-responders, names in history values, comments on closed incidents, no `UpdatedAt`/`ETag` bump, per-caller `commentCount`, 128 KiB body cap).
+- Touched shared files: `FindSimilarIncidentsHandlerTests` now stubs `ICurrentUser.ToActor()` (the projection needs the caller's role for `commentCount`); `AuthProbeController` uses the new `CommentDto` shape.
+
+#### Review (08_01)
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed (second run; the first was Incomplete, Docker went down) | 1012/1012 passed, 2/2 plan tests, format clean, 0 proposed tests required |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 7 Low |
+
+Verdict: **Approved**. Fixed after the review: SEC-1 (the body length is checked again after sanitizing, `422` on `body`, new test `Add_BodyLongerThanLimitOnceSanitized_Returns422`) and the stale 64 KiB text in the spec; full suite re-run green (1013 tests, build 0 warnings, format clean).
+Open non-blocking items: SEC-2 vulnerable transitive packages (MessagePack in Api, SSH.NET in tests; not from 08_01); L2 cursor decoding lives in the list handlers instead of the validators; L3 the internal-comment rule is checked in the handler and the domain; L4 keyset paging is duplicated in `ListCommentsHandler`/`ListHistoryHandler`; L5 fully qualified `IncidentNumber` in `HistoryValueResolver`; L6 the `Comment` entry in `HistoryFieldNames` is a no-op; L7 `AddComment` loads the whole incident. QA Lows: no test for `ApplicationId` name resolution in history, `UpdatedAt` is asserted unchanged only in the domain test, the POST response author comes from the token while GET joins `Users`.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1011 passed; 1 failure in 08_01 code (`FindSimilarIncidentsHandlerTests`, fixed by the other session's edit, not reproduced on rerun); 1 Medium (F1), 3 Low |
+| Security | Passed | 0 Critical, 0 High, 1 Medium (SEC-1), 3 Low |
+| Senior code review | Approved | 0 Critical, 0 High, 0 Medium, 4 Low |
+
+Open non-blocking items: F1 negative group assertions can pass before team groups are joined (`ConnectAsync` waits only for `user:`); F3 no test asserts string enums on the hub wire; SEC-1 hub calls unthrottled, `JoinDashboard`/`LeaveDashboard` hit SQL per call (cap watches per connection, reuse connect-time team ids); SEC-2 responder groups follow the token role (decision 4), SEC-3 stale membership until reconnect (decision 3), both to revisit in 09_02; SEC-4 pin a patched transitive `MessagePack`; L1 `CanWatchIncidentValidator` duplicates the hub's empty-id guard; L2 sequential group adds; L3 hub wrong-scope has no hub-level test (the scope policy is covered by `JwtValidationTests`); L4 reword the "malformed" comment in `WatchIncident`. `dotnet format` was not run by the reviewers; it only flags the 08_01 migration.
 
 ### Previous implementation (07_03)
 Done (906 tests green, format clean); review pending. Edit endpoint `PATCH /incidents/{id}`.
@@ -40,6 +72,12 @@ Approved (QA 673/673, security 1 Low, code review 4 Low); committed as `a2bba9d`
 Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Low); committed as `7656473`. Open non-blocking items: L1 stock `RequestSizeLimit` filter may log a "could not apply limit" warning on requests with an `Idempotency-Key`; L2 bodies over 30 KB are buffered to a temp file; Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default.
 
 ## Log
+- 2026-10-13 · 08_01 · Reviewed · Approved — QA 1012/1012 (+1 test after the fix), security 2 Low, code review 7 Low; SEC-1 fixed, 1013 tests green, format clean.
+- 2026-10-13 · 09_01 · Reviewed · Approved — QA 1011 passed, security 0 Critical/High (1 Medium, 3 Low), code review 4 Low.
+- 2026-10-13 · 08_01 · Done · Comments and history endpoints, `Comments` table, real `commentCount`; full suite green with Docker (1012 tests), plan test seeks the comments index; review pending.
+- 2026-10-13 · 08_01 · In progress · Started; pulls in the Comment half of the entities item and real `commentCount` from deferred items.
+- 2026-10-13 · 09_01 · Done · Hub contract, groups and watch checks; 397/399 integration tests green (2 failures in 08_01 code); review pending.
+- 2026-10-13 · 09_01 · Blocked · Code and tests complete, unit tests green; integration run waits for Docker.
 - 2026-10-13 · 09_01 · In progress · Started; hub contract, groups and access checks (no broadcasts yet).
 - 2026-10-13 · 07_03 · Reviewed · Approved — QA 906/906, security 3 Low, code review 3 Low.
 - 2026-10-13 · 07_03 · Done · `PATCH /incidents/{id}` with If-Match, role split (reporter: title/description/steps), severity reason + SLA restart, application move, duplicate 409; full suite green with Docker (906 tests); review pending.
