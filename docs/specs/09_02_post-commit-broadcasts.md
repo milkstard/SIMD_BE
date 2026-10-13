@@ -1,6 +1,6 @@
 # Spec 09_02: Post-commit broadcasts & dashboard throttle
 
-> Status: **Draft** · Source: BE-09 in docs/BACKEND-SPECS.md · Part 02 of 02
+> Status: **In progress** · Source: BE-09 in docs/BACKEND-SPECS.md · Part 02 of 02
 
 ## 1. Purpose & scope
 
@@ -92,3 +92,14 @@ No REST change. Event → recipients (all after commit):
 3. **Build order.** The comment broadcast depends on 08_01. Implement 09_02 after 08_01 (recommended) or ship it without comments and add that row with 08_01?
 4. **Broadcast timeout.** 2 s cap for the dispatch inside `SaveChangesAsync` is a proposal; alternatively dispatch on a background `Channel<>` consumer so no request ever waits (more moving parts, loses events on shutdown).
 5. **Incidents created by the Worker/webhook** (BE-17) will not broadcast until a cross-process path exists (see Out of scope). Confirm that is acceptable for v1.
+
+## 9. Decisions (2026-10-13)
+
+1. OQ 1: `CommentAddedEvent(IncidentId, CommentDto)` already matches the contract; no change.
+2. OQ 2: the throttle is per process.
+3. OQ 3: 08_01 is built, so the comment broadcast ships here.
+4. OQ 4: inline dispatch, capped at 2 s; failures and timeouts are logged, never rethrown.
+5. OQ 5: Worker/webhook-created changes do not broadcast in v1 (stays deferred to BE-12/BE-17).
+6. Broadcast summaries carry the public `commentCount` (internal comments excluded) because they reach Reporters.
+7. `AttachmentAdded` broadcasts nothing: files arrive with `IncidentCreated` (report) or `CommentAdded.comment.attachments`.
+8. `IDashboardSummaryReader.GetAsync` returns `DashboardSummaryDto?`; the null-object returns `null`, which means "send nothing".

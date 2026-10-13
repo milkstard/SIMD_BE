@@ -471,6 +471,14 @@ public interface IIncidentClient
 }
 ```
 
+Notes on the events above:
+- `IncidentUpdated` is sent once per incident per save, however many changes it carried; it holds the state read after the commit (new `rowVersion`).
+- The `commentCount` of a pushed `IncidentSummary` counts public comments only (it reaches Reporters too); a Responder gets the exact count on the next REST read.
+- An internal `CommentAdded` goes to `responders:{teamId}` only, never to `incident:{id}`.
+- Linking files sends no event of its own: a new incident's files are in the detail read after `IncidentCreated`, a comment's in `CommentAdded.comment.attachments`.
+- `DashboardChanged` is capped at one per second per team and per API instance; it is not sent until the dashboard summary exists (BE-11).
+- Changes made by the Worker (SLA breach, webhook-created incidents) are not broadcast yet.
+
 Events are sent **after** the database commit. Delivery is best-effort: on reconnect the client
 refetches (`invalidateQueries`), so events never need to be replayed.
 

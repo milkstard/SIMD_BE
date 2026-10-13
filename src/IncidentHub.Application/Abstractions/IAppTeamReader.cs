@@ -8,6 +8,9 @@ public interface IAppTeamReader
 
     Task<IReadOnlyList<Guid>> GetTeamIdsForUserAsync(Guid userId, CancellationToken cancellationToken);
 
+    /// <summary>The team that owns the application, or null when the application is unknown.</summary>
+    Task<Guid?> GetOwningTeamIdAsync(Guid applicationId, CancellationToken cancellationToken);
+
     /// <summary>Drops cached membership; call after the team of an application changes.</summary>
     Task InvalidateAsync(Guid userId, Guid applicationId, CancellationToken cancellationToken);
 }

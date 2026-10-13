@@ -36,6 +36,7 @@ public static class DependencyInjection
             return ConnectionMultiplexer.Connect(redisOptions);
         });
 
+        services.AddScoped<PostCommitHook>();
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IAppTeamReader, RedisAppTeamReader>();
         services.AddScoped<IIdempotencyStore, RedisIdempotencyStore>();

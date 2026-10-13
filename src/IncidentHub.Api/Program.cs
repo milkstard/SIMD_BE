@@ -6,6 +6,7 @@ using IncidentHub.Api.Hubs;
 using IncidentHub.Api.Swagger;
 using IncidentHub.Api.Telemetry;
 using IncidentHub.Application;
+using IncidentHub.Application.Abstractions;
 using IncidentHub.Infrastructure;
 using IncidentHub.Infrastructure.Telemetry;
 using OpenTelemetry.Metrics;
@@ -45,6 +46,10 @@ builder.Services.AddSignalR()
     options.Configuration = ConfigurationOptions.Parse(IncidentHub.Infrastructure.DependencyInjection.RequireConnectionString(builder.Configuration, "Redis"));
     options.Configuration.AbortOnConnectFail = false;
 });
+
+builder.Services.AddSingleton<IDashboardBroadcaster, HubDashboardBroadcaster>();
+builder.Services.AddSingleton<DashboardThrottle>();
+builder.Services.AddSingleton<IPostCommitDispatcher, HubPostCommitDispatcher>();
 
 var app = builder.Build();
 

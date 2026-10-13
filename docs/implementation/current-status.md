@@ -7,40 +7,44 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
-| Spec | `docs/specs/08_03_attachment-linking.md` (BE-08, part 3 of 3) |
+| Spec | `docs/specs/09_02_post-commit-broadcasts.md` (BE-09, part 2 of 2) |
 | State | Done <!-- Planned · In progress · Blocked · Done --> |
 | Started | 2026-10-13 |
 | Last updated | 2026-10-13 |
-| Branch / commit | main / `2a60af1` |
+| Branch / commit | main / `afcee75` |
 
 ### Progress
-- [x] Docs/tracking: spec decisions (08_03 §8), deferred/completed items
-- [x] Domain: `Attachment.LinkTo`, `AttachmentAdded`, `Incident.AttachFiles`, `Report`/`AddComment` take attachments
-- [x] Application: validators (max 10), `AttachmentLinker`, Report/AddComment handlers, real `attachments` in detail and comments, history fields
-- [x] Infrastructure: concurrency token on `Attachments.IncidentId` (snapshot-only migration `AttachmentLinkConcurrency`), `OrphanAttachmentSweeper`
-- [x] Api: `attachmentIds` on `AddCommentRequest`
-- [x] Worker: `OrphanAttachmentJob`
-- [x] API-CONTRACT.md, DATABASE.md, `contracts/swagger.json`
-- [x] Tests (unit + integration)
+- [x] Docs/tracking: spec decisions (09_02 §8), deferred/completed items, API-CONTRACT §7
+- [x] Application: `IPostCommitDispatcher`, `IDashboardSummaryReader` (+ null object), `IAppTeamReader.GetOwningTeamIdAsync`, `IncidentBroadcaster` + reader
+- [x] Infrastructure: post-commit hook in `AppDbContext` (fresh scope, 2 s cap, logged failures)
+- [x] Api: `HubPostCommitDispatcher`, `DashboardThrottle`, DI
+- [x] Worker: no-op dispatcher
+- [x] Tests written: `IncidentBroadcasterTests` (8), `DashboardThrottleTests` (7), integration `BroadcastTests` (11) and `PostCommitDispatchTests` (3)
+- [x] Integration tests run with Docker
 
 ### Verification
 - `dotnet build`: 0 warnings, 0 errors. `dotnet format --verify-no-changes` clean.
-- `dotnet test --filter Category!=Performance` with Docker: Domain 456, Application 196, Api.UnitTests 75, Api.IntegrationTests 484 passed, 0 failed (new: `AttachmentLinkTests`, validator cases, `ReportIncidentAttachmentTests`, `CommentAttachmentTests` incl. concurrent link and constant query count, `OrphanAttachmentJobTests`).
-- `contracts/swagger.json` regenerated: additive (`attachmentIds` on the comment request).
-- Not run: a manual smoke test with the real Worker process (the sweeper is covered through `OrphanAttachmentSweeper`).
-- Deviations from the spec: the sweeper lives in Infrastructure with a thin Worker job (decision 6); the link race is settled by an EF concurrency token on `IncidentId`, so the migration only updates the model snapshot.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 456, Application 204, Api.UnitTests 82 passed, 0 failed.
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 499 passed, 0 failed (new: `BroadcastTests` 11, `PostCommitDispatchTests` 3). An earlier full run showed 16 failures in `AssignIncidentTests`, `CanWatchIncidentHandlerTests` and `CommentTests`; those classes pass alone and the full rerun was green, but I did not capture the cause (suspected load or overlapping runs).
+- `contracts/swagger.json` not regenerated (no endpoint or DTO change). Not run: a manual two-host smoke test outside the test host.
+
+### Decisions (2026-10-13)
+Throttle per process; inline dispatch capped at 2 s; broadcast summaries carry the public `commentCount`; `AttachmentAdded` broadcasts nothing (files ride on `IncidentCreated`/`CommentAdded`).
+
+### Blockers / open questions
+None.
 
 ### Review
 | Stage | Result | Key numbers |
 |---|---|---|
-| QA | Passed | 1211/1211 passed, 0 proposed tests required, 1 Medium, 3 Low |
-| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
-| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 5 Low |
+| QA | Passed | 1241/1241 passed (integration 499, run twice), 0 proposed tests required, 1 Medium, 5 Low |
+| Security | Passed | 0 Critical / 0 High / 1 Medium / 3 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 2 Medium / 4 Low |
 
-Verdict: **Approved**. Fixed after the review: QA M1 (new deterministic test `LinkAttachment_TwoContextsLoadedUnlinked_SecondSaveThrowsConcurrency`; it fails when the token is removed), L1 (already true: the handler throws the 403 before loading attachments; pinned by `Comment_InternalAsReporterWithBadAttachment_Returns403Not422`) and L5 (dead null checks removed); full suite re-run green (1213 tests), build 0 warnings, format clean. Open non-blocking items: QA Low: the rollback test bypasses the handlers and covers report only, comment-path 422 cases (duplicate, Infected, already linked) have no integration test, no `AttachmentLinker` unit tests (it is `internal static` over `IAppDbContext`, covered at integration level), sweeper `BatchSize` 100 per hour. Security: SEC-1 transitive MessagePack (pre-existing, 08_01 SEC-4), SEC-2 the `OrphanAttachmentJob` drain loop is not capped to the 5-minute lock. Code review: L2 the `DbUpdateConcurrencyException` catch is safe only while these saves update no other guarded row; L3 a real scanner's `UPDLOCK` batch could make a link of a `Pending` file wait; L4 `Incident.AttachFiles` takes `isInternal` separately from `commentId`.
+Verdict: **Approved**. Open non-blocking items: QA M1 no test for an explicit transaction rollback (the hook runs after the real commit only because no handler opens a transaction), L1 2 s cap untested, L2 no test that the broadcast `commentCount` excludes internal comments, L3 no tests for `AttachmentAdded`/null reader, L4 sync `SaveChanges` blocks on the async dispatch; SEC-1 (Medium) `incident:{id}` watchers keep receiving after an incident moves to another team (extends the 09_01 stale-membership decision), SEC-2/QA L5 a timed-out dispatch is not cancelled (pass a `CancellationTokenSource(Timeout)` token), SEC-3 internal routing trusts the event flag instead of the stored row, SEC-4 transitive MessagePack; code review M1 `IAppTeamReader.GetOwningTeamIdAsync` has no caller, M2 one failing send in `HubPostCommitDispatcher` skips the remaining messages and the dashboard notify, L1 summary and owning team take two queries (spec says one), L2 the old team is not told that an incident left it, L3 timer and scope per leading edge while the reader is the null-object, L4 `AppDbContext` needs an `IPostCommitDispatcher` registration from the host. The cause of the 16 transient failures in one earlier full run was not found (not reproduced in two reruns).
 
-### Blockers / open questions
-None. Decided 2026-10-13: `Pending` files can be linked, `Infected` ones cannot; never-linked uploads are hard-deleted after 24 h; comments on a closed incident can carry attachments; only the uploader can link (one generic 422 message).
+### Previous implementation (08_03)
+Approved (QA 1211/1211, security 2 Low, code review 5 Low, fixes applied; 1213 tests green); committed as `afcee75`.
 
 ### Previous implementation (08_02)
 Approved (QA 1154/1154, security 3 Low, code review 1 Medium / 5 Low, all fixed afterwards; 1163 tests green); committed as `2a60af1`. Pending items: a manual smoke test with the real Worker process, and no Application-level `GetAttachmentDownloadHandlerTests`.
@@ -89,6 +93,10 @@ Approved (QA 673/673, security 1 Low, code review 4 Low); committed as `a2bba9d`
 Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Low); committed as `7656473`. Open non-blocking items: L1 stock `RequestSizeLimit` filter may log a "could not apply limit" warning on requests with an `Idempotency-Key`; L2 bodies over 30 KB are buffered to a temp file; Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default.
 
 ## Log
+- 2026-10-13 · 09_02 · Reviewed · Approved — QA 1241/1241 (1 Medium, 5 Low), security 0 Critical/High (1 Medium, 3 Low), code review 2 Medium / 4 Low.
+- 2026-10-13 · 09_02 · Done · Post-commit hook, broadcasts and dashboard throttle; integration 499 + unit tests green with Docker; review pending.
+- 2026-10-13 · 09_02 · Blocked · Code and tests complete, unit tests green; integration run waits for Docker.
+- 2026-10-13 · 09_02 · In progress · Started; post-commit hook, broadcasts and dashboard throttle.
 - 2026-10-13 · 08_03 · Fixed · Review M1 (deterministic concurrency test) and L5; L1 was already satisfied (test added); 1213 tests green, format clean.
 - 2026-10-13 · 08_03 · Reviewed · Approved — QA 1211/1211 (1 Medium, 3 Low), security 2 Low, code review 5 Low.
 - 2026-10-13 · 08_03 · Done · Attachment linking on report and comments, real `attachments`, `AttachmentAdded`, orphan sweeper; full suite green with Docker (1211 tests); review pending.

@@ -99,6 +99,24 @@ internal static class IncidentProjections
             .Select(r => r.Attachment)
             .ToListAsync(cancellationToken);
 
+    /// <summary>
+    /// Fills <see cref="CommentDto.Attachments"/> with one query for the whole page (no N+1). The caller has already left out the
+    /// comments the viewer may not see, so the files of those are never loaded.
+    /// </summary>
+    public static async Task<List<CommentDto>> WithAttachmentsAsync(IAppDbContext db, List<CommentDto> comments, CancellationToken cancellationToken)
+    {
+        if (comments.Count == 0)
+        {
+            return comments;
+        }
+
+        var ids = comments.Select(c => c.Id).ToList();
+        var files = await AttachmentRows(db, db.Attachments.Where(a => a.CommentId != null && ids.Contains(a.CommentId.Value)))
+            .ToListAsync(cancellationToken);
+        var byComment = files.ToLookup(f => f.CommentId!.Value, f => f.Attachment);
+        return comments.Select(c => c with { Attachments = byComment[c.Id].ToList() }).ToList();
+    }
+
     /// <summary>Projects attachments to DTOs with their uploader, oldest first. The caller has already scoped <paramref name="attachments"/>.</summary>
     public static IQueryable<AttachmentRow> AttachmentRows(IAppDbContext db, IQueryable<Attachment> attachments) =>
         from a in attachments.AsNoTracking()

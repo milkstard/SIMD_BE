@@ -13,6 +13,8 @@ builder.AddIncidentHubObservability(WorkerTelemetry.Source);
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSingleton<ICurrentUser, SystemCurrentUser>();
+// Nothing broadcasts from the Worker in 09_02 (needs a cross-process path, BE-12/BE-17).
+builder.Services.AddSingleton<IPostCommitDispatcher, NoOpPostCommitDispatcher>();
 builder.Services.AddHostedService<AttachmentScanJob>();
 builder.Services.AddHostedService<OrphanAttachmentJob>();
 

@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IncidentHub.Infrastructure.Persistence;
 
-public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options), IAppDbContext
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options, PostCommitHook? postCommit = null) : DbContext(options), IAppDbContext
 {
     private const int UniqueIndexViolation = 2601;
     private const int UniqueConstraintViolation = 2627;
@@ -41,7 +41,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     /// <see cref="OutboxMessage"/> rows saved in the same transaction, then reports unique-index violations without leaking SQL types:
     /// the open-fingerprint index becomes <see cref="DuplicateIncidentException"/> (a <see cref="ConflictException"/>),
     /// any other one <see cref="DuplicateKeyException"/> (still a <see cref="DbUpdateException"/>). Handlers turn both into a 409.
-    /// The events are cleared from the aggregates only once the save succeeded.
+    /// The events are cleared from the aggregates only once the save succeeded, and only then handed to the <see cref="PostCommitHook"/>
+    /// (never mid-transaction, and nothing is dispatched for a failed save).
     /// </summary>
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
@@ -51,6 +52,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             var saved = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
             OnSaved(staged);
+            await DispatchAsync(staged);
             return saved;
         }
         catch (DbUpdateException ex) when (TranslateUniqueViolation(ex) is { } translated)
@@ -74,6 +76,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         {
             var saved = base.SaveChanges(acceptAllChangesOnSuccess);
             OnSaved(staged);
+            DispatchAsync(staged).GetAwaiter().GetResult();
             return saved;
         }
         catch (DbUpdateException ex) when (TranslateUniqueViolation(ex) is { } translated)
@@ -138,17 +141,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             .ToList();
 
         OutboxMessages.AddRange(messages);
-        return new StagedOutbox(aggregates, messages);
+        return new StagedOutbox(aggregates, messages, aggregates.SelectMany(a => a.DomainEvents).ToList());
     }
 
     private static void OnSaved(StagedOutbox staged)
     {
-        // Post-commit hook: BE-09 broadcasts the events to SignalR here, before they are cleared.
         foreach (var aggregate in staged.Aggregates)
         {
             aggregate.ClearDomainEvents();
         }
     }
+
+    private Task DispatchAsync(StagedOutbox staged) =>
+        postCommit is null ? Task.CompletedTask : postCommit.RunAsync(staged.Events);
 
     /// <summary>After a failed save the aggregates keep their events, so the outbox rows must not stay tracked or a retry would add them twice.</summary>
     private void DetachOutbox(StagedOutbox staged)
@@ -159,5 +164,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         }
     }
 
-    private sealed record StagedOutbox(IReadOnlyList<AggregateRoot> Aggregates, IReadOnlyList<OutboxMessage> Messages);
+    /// <param name="Events">Snapshot taken before the aggregates are cleared, in the order they were raised.</param>
+    private sealed record StagedOutbox(IReadOnlyList<AggregateRoot> Aggregates, IReadOnlyList<OutboxMessage> Messages, IReadOnlyList<IDomainEvent> Events);
 }
