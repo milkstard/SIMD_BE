@@ -37,6 +37,17 @@ internal static class IncidentWriteHelpers
         return await client.SendAsync(request);
     }
 
+    public static async Task<HttpResponseMessage> PatchAsync(HttpClient client, Guid id, object body, string? ifMatch)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Patch, $"/api/v1/incidents/{id}") { Content = JsonContent.Create(body) };
+        if (ifMatch is not null)
+        {
+            request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+        }
+
+        return await client.SendAsync(request);
+    }
+
     public static async Task<List<IncidentHistory>> HistoryAsync(ApiFactory factory, Guid incidentId)
     {
         using var scope = factory.Services.CreateScope();

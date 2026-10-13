@@ -9,6 +9,7 @@ using IncidentHub.Application.Incidents.GetIncident;
 using IncidentHub.Application.Incidents.ListIncidents;
 using IncidentHub.Application.Incidents.ReportIncident;
 using IncidentHub.Application.Incidents.TransitionIncident;
+using IncidentHub.Application.Incidents.UpdateIncident;
 using IncidentHub.Domain.Apps;
 using IncidentHub.Domain.Incidents;
 using MediatR;
@@ -158,6 +159,26 @@ public sealed class IncidentsController(ISender sender) : ControllerBase
         Ok(await sender.Send(
             new AssignIncidentCommand(id, request.AssigneeId, request.TeamId, HttpContext.GetIfMatchRowVersion()),
             cancellationToken));
+
+    // Responder-level fields are checked in the handler (the reporter may edit title, description and steps).
+    [HttpPatch("{id:guid}")]
+    [Authorize(Policy = Policies.CanViewIncident)]
+    [RequireIfMatch]
+    [RequestSizeLimit(MaxRequestBytes)]
+    [ProducesResponseType<IncidentDetailDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    public async Task<ActionResult<IncidentDetailDto>> Update(
+        Guid id,
+        [FromBody] UpdateIncidentRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await sender.Send(request.ToCommand(id, HttpContext.GetIfMatchRowVersion()), cancellationToken));
 
     private static bool TryParseSort(string? token, out IncidentSort sort)
     {

@@ -13,7 +13,6 @@ Rules:
 | Post-commit dispatch of domain events to SignalR | 04_01 | BE-09 | |
 | `Comment`/`Attachment` entities, tables and events (`CommentAdded`, `AttachmentAdded`) | 04_01, 04_02 | BE-08 | |
 | `AppStatusCalculator` | 04_01 | BE-11 | |
-| Team-membership resource check on incident endpoints (write half: PATCH) | 04_01 | BE-07 (07_03) | `IAppTeamReader` already exists; report half delivered by 05_02, read half (list, detail) by 07_01, transitions and assignment by 07_02 (`IncidentWriteGuard`) |
 | `SlaPolicies` table | 04_02 | BE-12 | |
 | `Notifications` table | 04_02 | BE-14 | |
 | `IncidentDailyStats` table | 04_02 | BE-15 | |

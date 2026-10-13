@@ -1,6 +1,6 @@
 # Spec 07_03: Incident edit (PATCH)
 
-> Status: **Draft** · Source: BE-07 in docs/BACKEND-SPECS.md · Part 03 of 03
+> Status: **Implemented** · Source: BE-07 in docs/BACKEND-SPECS.md · Part 03 of 03
 
 ## 1. Purpose & scope
 
@@ -31,7 +31,7 @@ No items are deferred to this part from `deferred-items.md` beyond the shared me
 - `UpdateIncidentHandler(IAppDbContext db, ICurrentUser currentUser, IAppTeamReader teams, IHtmlSanitizer sanitizer, ISlaPolicyProvider slaPolicies, TimeProvider time, ILogger<...> logger)`:
   1. Load the aggregate tracked; missing or caller not in the application's team → `NotFoundException` (404, as in 07_02).
   2. `IncidentPermissions.CanEdit(...)` false (not Responder+/not the reporter, or Closed) → `ForbiddenException` (403) for role, closed → `IncidentClosedException` (409 from the domain). Severity and priority changes require a Responder-level role (OQ 2).
-  3. Set `RowVersion` original value from `ExpectedRowVersion` (stale → 409).
+  3. Stale version → 409 (done by `IncidentWriteGuard`, see §8 decision 7).
   4. If `ApplicationId` changes: target application must exist, be active and the caller must be a member of its team (no Admin bypass), else `ValidationException` on `applicationId` ("Application not found or not available to you." — the shared `IncidentMessages` constant); the effective `Environment` must be offered by the target application, else `ValidationException` on `environment`. If only `Environment` changes, validate against the current application.
   5. Sanitize `description` and `stepsToReproduce`; empty after sanitizing → `ValidationException` on `description`.
   6. Duplicate pre-check when title or application changes: another open incident with the new fingerprint → `DuplicateIncidentException(existingNumber)`; the unique index stays the race backstop.
@@ -41,7 +41,7 @@ No items are deferred to this part from `deferred-items.md` beyond the shared me
   10. Return the refreshed detail DTO.
 
 ### Infrastructure
-Outbox mapping for `IncidentUpdated` (if not already added in 07_02): type `IncidentUpdated`, payload = event JSON.
+None: `AppDbContext.StageOutbox` already writes an outbox row for every domain event, `IncidentUpdated` included. A combined edit with a severity change raises two `IncidentUpdated` events (two rows).
 
 ### Api
 `Controllers/IncidentsController`:
@@ -63,16 +63,16 @@ is `422`; changing `applicationId` requires membership of the target application
 
 ## 5. Acceptance criteria
 
-- [ ] A responder can change any listed field; a Reporter-role reporter can edit title/description/steps of their own open incident but not severity or priority; other callers get `403`; non-members get `404`.
-- [ ] Only the fields sent change; absent fields are untouched; `stepsToReproduce: null` and `priority: null` clear the value; one history row per changed field with old and new values; an unchanged value produces no history row and no event.
-- [ ] Changing `severity` requires `reason` (422 otherwise), writes a `Severity` history row with the reason as note, and sets `AckDueAt`/`ResolveDueAt` from the new policy (equal to `SlaClock.DueTimes(policy, changeTime)`); the response shows the new due times.
-- [ ] Stale `If-Match` → `409` with the incident unchanged; missing → `428`; malformed → `400`.
-- [ ] A closed incident cannot be edited (`409`, `invalid-transition` type).
-- [ ] Changing the title or application recomputes the fingerprint; colliding with another open incident → `409` with `existingIncidentNumber`.
-- [ ] Moving to another application requires membership of its team and an environment it offers (`422` on `applicationId` / `environment` otherwise).
-- [ ] `<script>` / `onerror=` in `description` or `stepsToReproduce` is stripped before storage.
-- [ ] Incident, history and outbox rows are written by one `SaveChangesAsync`.
-- [ ] No logic in the controller; times from `TimeProvider`; contract + `swagger.json` updated; build + `dotnet format` clean.
+- [x] A responder can change any listed field; a Reporter-role reporter can edit title/description/steps of their own open incident but not severity or priority; other callers get `403`; non-members get `404`.
+- [x] Only the fields sent change; absent fields are untouched; `stepsToReproduce: null` and `priority: null` clear the value; one history row per changed field with old and new values; an unchanged value produces no history row and no event.
+- [x] Changing `severity` requires `reason` (422 otherwise), writes a `Severity` history row with the reason as note, and sets `AckDueAt`/`ResolveDueAt` from the new policy (equal to `SlaClock.DueTimes(policy, changeTime)`); the response shows the new due times.
+- [x] Stale `If-Match` → `409` with the incident unchanged; missing → `428`; malformed → `400`.
+- [x] A closed incident cannot be edited (`409`, `invalid-transition` type).
+- [x] Changing the title or application recomputes the fingerprint; colliding with another open incident → `409` with `existingIncidentNumber`.
+- [x] Moving to another application requires membership of its team and an environment it offers (`422` on `applicationId` / `environment` otherwise).
+- [x] `<script>` / `onerror=` in `description` or `stepsToReproduce` is stripped before storage.
+- [x] Incident, history and outbox rows are written by one `SaveChangesAsync`.
+- [x] No logic in the controller; times from `TimeProvider`; contract + `swagger.json` updated; build + `dotnet format` clean.
 
 ## 6. Test plan
 
@@ -97,12 +97,14 @@ is `422`; changing `applicationId` requires membership of the target application
 - Editing comments / attachments → BE-08.
 - SignalR `IncidentUpdated` → BE-09; email on update → BE-10.
 
-## 8. Open questions
+## 8. Decisions
 
-All proposals; confirm before implementing.
+Decided with the user on 2026-10-13.
 
-1. **SLA base time.** CLAUDE.md says due times are "computed by `SlaClock` on create and on severity change". Proposal: on a severity change count from the time of the change (the 04_01 `ChangeSeverity` signature takes due times; nothing says "from `CreatedAt`"). Alternative: keep the original `CreatedAt` as the base so the clock does not restart.
-2. **Who may edit what.** BACKEND-SPECS only says "edit"; 05_02 OQ 7 defined `canEdit` as Responder/TeamLead/Admin or the reporter (open incident). Proposal: reporters may change title, description and steps; severity, priority, application and environment require a Responder-level role.
-3. **`reason` without `severity`.** Proposal: ignore it (no error) — or 422? Proposal: ignore, because the contract says "required when severity changes".
-4. **`applicationId` change** is allowed in the contract. Proposal: allowed for Responder+ who belong to both teams; the incident's assignee and assigned team are cleared if they no longer fit? Proposal: leave them as they are (out of scope), and document it.
-5. **Severity set to the current value** is a domain no-op (04_01): no history, no due-time change, `reason` still required by the validator. Confirm.
+1. **SLA base time:** on a severity change the due times are `SlaClock.DueTimes(policy, changeTime)`; the clock restarts at the change.
+2. **Who may edit what:** Responder, TeamLead and Admin of the application's team may change any field. The incident's reporter (any role) may change only title, description and steps; severity, priority, application and environment from a non-responder are `403`.
+3. **`reason` without `severity`** is ignored (no error).
+4. **`applicationId` change:** the caller must be a member of the target application's team (no Admin bypass), the target must be active and offer the effective environment. The assignee and assigned team are left as they are (documented in the contract).
+5. **Severity set to the current value** is a domain no-op (no history, due times unchanged); `reason` is still required by the validator.
+6. **Command shape:** every field is an `Optional<T?>` on the command so an explicit `null` on a field that may not be null reaches the validator (422 on that field) instead of being lost. The handler builds the domain `IncidentChanges`.
+7. **Concurrency:** as in 07_02, `IncidentWriteGuard` compares the loaded `RowVersion` with `If-Match` (409); a writer that commits in between fails the `UPDATE` (`DbUpdateConcurrencyException`, 409). The 403/409 permission checks run before data-dependent 422s.

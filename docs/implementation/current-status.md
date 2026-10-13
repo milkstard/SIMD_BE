@@ -7,42 +7,28 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
-| Spec | `docs/specs/07_02_incident-transition-and-assignment.md` (BE-07, part 2 of 3) |
-| State | Done <!-- Planned · In progress · Blocked · Done --> |
+| Spec | `docs/specs/09_01_hub-groups-and-access.md` (BE-09, part 1 of 2) |
+| State | In progress <!-- Planned · In progress · Blocked · Done --> |
 | Started | 2026-10-13 |
 | Last updated | 2026-10-13 |
-| Branch / commit | main / `38a3e72` |
+| Branch / commit | main / `24d65aa` (07_03 and 08_01 work is still uncommitted in the tree) |
 
 ### Progress
-- [x] Docs/tracking: spec OQ decided, deferred/completed items
-- [x] Application: `IncidentWriteGuard`, `LoadDetailAsync`, `TransitionIncident`, `AssignIncident`
-- [x] Api: `IncidentsController.Transition/Assign`, `TransitionRequest`/`AssignRequest`
-- [x] API-CONTRACT.md + `contracts/swagger.json` (additive: two POST operations, 453 insertions, 0 deletions)
-- [x] Tests: validators, transition/assignment endpoints, outbox rows, concurrency rollback
-
-### Verification
-- `dotnet build` (whole solution, warnings as errors): 0 warnings, 0 errors.
-- `dotnet test --filter Category!=Performance` (Docker up): Domain 355, Application 129, Api.UnitTests 68, Api.IntegrationTests 315 passed, 0 failed (after the M1 fix).
-- `dotnet format --verify-no-changes`: clean. `contracts/swagger.json` regenerated (additive).
-- No Infrastructure change was needed: `AppDbContext.StageOutbox` already writes a row for every domain event; the endpoint tests prove the `IncidentTransitioned` / `IncidentAssigned` rows and the rollback (a concurrent save leaves no extra history or outbox row).
-- Stale writes: the loaded `RowVersion` is compared with `If-Match` (409) and a writer that commits in between fails the `UPDATE` (`DbUpdateConcurrencyException`, 409); the concurrent test with one ETag gives exactly one 200 and one 409.
-- Docker Desktop had to be started (not running at session start).
+- [ ] Docs/tracking: spec decisions
+- [ ] Application: `IAppTeamReader.GetTeamIdsForUserAsync`, `CanWatchIncident` query, hub payload DTOs
+- [ ] Infrastructure: `RedisAppTeamReader.GetTeamIdsForUserAsync`
+- [ ] Api: `IIncidentClient` (6 methods), `HubGroups`, `IncidentsHub` rewrite
+- [ ] API-CONTRACT.md §7
+- [ ] Tests: hub groups/watch, probe rewrite, handler, validator, client contract
 
 ### Blockers / open questions
-None. Decided 2026-10-13: non-member gets 404 (Admin included); assignee must be a member of the application's owning team; `teamId` may be any existing team; `duplicateOfId` must be a different incident the caller can see.
+None. Decided 2026-10-13: `dashboard:{teamId}` + `team:{teamId}` groups; stale membership accepted until reconnect; responder groups follow the token role; `GetOwningTeamIdAsync` moves to 09_02.
 
-### Review
-`/review-spec` on 2026-10-13 · change set: uncommitted working tree on `38a3e72` (07_02).
+### Previous implementation (07_03)
+Done (906 tests green, format clean); review pending. Edit endpoint `PATCH /incidents/{id}`.
 
-| Stage | Result | Key numbers |
-|---|---|---|
-| QA | Passed | 865 passed / 0 failed (Domain 355, Application 129, Api.UnitTests 68, Api.IntegrationTests 313); 0 proposed tests; swagger regeneration and `dotnet format` not re-run by QA |
-| Security | Passed | 0 Critical / 0 High / 0 Medium / 1 Low (transition `note` stored unsanitized; only matters if the UI renders history notes as HTML) |
-| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 5 Low |
-
-Verdict: **Approved**.
-
-Fixed after review: M1 (the duplicate-target check now runs after `TransitionTo` and before the save, so 403/409 win over 422; two new endpoint tests). Open non-blocking items: L1 the detail is read after the commit (a failed read turns a committed write into a 500; one detail projection would help, same as 07_01 L2); L2 `Users.AnyAsync` is redundant before `IsMemberAsync` (FK); L3 closed-incident 409 comes after the assignee/team lookups; L4 name the `(IncidentStatus)(-1)` sentinel; L5 a concurrent team delete would surface as 500 (teams are never deleted today). QA Lows: `allowedTransitions >= 0` assertion is vacuous, rollback test uses `DateTimeOffset.UtcNow`, the `DbUpdateConcurrencyException` to 409 path has no endpoint test, no TeamLead/Admin caller in the theory. Security Low: sanitize or tag-strip transition notes if history is rendered as HTML.
+### Previous implementation (07_02)
+Approved (QA 865/865, security 1 Low, code review 1 Medium fixed / 5 Low); committed as `24d65aa`. Open non-blocking items: L1 the detail is read after the commit (one projection would help); L2 `Users.AnyAsync` is redundant before `IsMemberAsync`; L3 closed-incident 409 comes after the assignee/team lookups; L4 name the `(IncidentStatus)(-1)` sentinel; L5 a concurrent team delete would surface as 500. QA Lows: vacuous `allowedTransitions >= 0` assertion, rollback test uses `DateTimeOffset.UtcNow`, the `DbUpdateConcurrencyException` to 409 path has no endpoint test. Security Low: transition `note` is stored unsanitized.
 
 ### Previous implementation (07_01)
 Approved (QA 810/810 + plan test, security 3 Low, code review 2 Medium / 5 Low); committed as `38a3e72`. Open non-blocking items: M1 severity rank is written four times in `ListIncidentsHandler` (one shared expression); M2 keyset tie-break branches untested (seed identical `CreatedAt`/`UpdatedAt`); L1 `IncidentPermissions.AllowedTransitions` is a pass-through and the create mapper still calls the workflow directly; L2 detail takes three round trips; L3 `severity` and `-updatedAt` sorts are not plan-tested or indexed; L4 add a stop-word-only `q` case and note the 500-id cap in API-CONTRACT; L5 sort token parsing lives in the controller.
@@ -54,6 +40,10 @@ Approved (QA 673/673, security 1 Low, code review 4 Low); committed as `a2bba9d`
 Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Low); committed as `7656473`. Open non-blocking items: L1 stock `RequestSizeLimit` filter may log a "could not apply limit" warning on requests with an `Idempotency-Key`; L2 bodies over 30 KB are buffered to a temp file; Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default.
 
 ## Log
+- 2026-10-13 · 09_01 · In progress · Started; hub contract, groups and access checks (no broadcasts yet).
+- 2026-10-13 · 07_03 · Reviewed · Approved — QA 906/906, security 3 Low, code review 3 Low.
+- 2026-10-13 · 07_03 · Done · `PATCH /incidents/{id}` with If-Match, role split (reporter: title/description/steps), severity reason + SLA restart, application move, duplicate 409; full suite green with Docker (906 tests); review pending.
+- 2026-10-13 · 07_03 · In progress · Started; finishes the PATCH half of the team-membership check from deferred items.
 - 2026-10-13 · 07_02 · Fixed · Review M1: duplicate-target check runs after the domain validates the move (403/409 before 422); 867 tests green, format clean.
 - 2026-10-13 · 07_02 · Reviewed · Approved — QA 865/865, security 1 Low, code review 1 Medium / 5 Low.
 - 2026-10-13 · 07_02 · Done · `POST /incidents/{id}/transitions` and `/assignment` with If-Match, 404 for non-members, outbox rows and refreshed detail; full suite green with Docker (865 tests); review pending.

@@ -38,7 +38,7 @@ public sealed class ReportIncidentHandler(
 
         if (!app.Environments.Contains(request.Environment))
         {
-            throw Invalid(nameof(request.Environment), "The application is not offered in this environment.");
+            throw Invalid(nameof(request.Environment), IncidentMessages.EnvironmentNotOffered);
         }
 
         var title = request.Title.Trim();
