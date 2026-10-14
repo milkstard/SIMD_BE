@@ -15,7 +15,7 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 ### Progress
 - [x] Docs/tracking: spec decisions (09_02 §8), deferred/completed items, API-CONTRACT §7
-- [x] Application: `IPostCommitDispatcher`, `IDashboardSummaryReader` (+ null object), `IAppTeamReader.GetOwningTeamIdAsync`, `IncidentBroadcaster` + reader
+- [x] Application: `IPostCommitDispatcher`, `IDashboardSummaryReader` (+ null object), `IncidentBroadcaster` + reader
 - [x] Infrastructure: post-commit hook in `AppDbContext` (fresh scope, 2 s cap, logged failures)
 - [x] Api: `HubPostCommitDispatcher`, `DashboardThrottle`, DI
 - [x] Worker: no-op dispatcher
@@ -24,8 +24,9 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 ### Verification
 - `dotnet build`: 0 warnings, 0 errors. `dotnet format --verify-no-changes` clean.
-- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 456, Application 204, Api.UnitTests 82 passed, 0 failed.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 456, Application 204, Application 205, Api.UnitTests 90 passed, 0 failed (after the review fixes: `HubPostCommitDispatcherTests`, `PostCommitHookTests`, `HubDashboardBroadcasterTests`, one more broadcaster case).
 - `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 499 passed, 0 failed (new: `BroadcastTests` 11, `PostCommitDispatchTests` 3). An earlier full run showed 16 failures in `AssignIncidentTests`, `CanWatchIncidentHandlerTests` and `CommentTests`; those classes pass alone and the full rerun was green, but I did not capture the cause (suspected load or overlapping runs).
+- Integration tests re-run after the review fixes: 500 passed, 0 failed (one extra `BroadcastTests` case). A run in between failed all 500 at fixture start because the Docker pipe timed out; the immediate rerun was green.
 - `contracts/swagger.json` not regenerated (no endpoint or DTO change). Not run: a manual two-host smoke test outside the test host.
 
 ### Decisions (2026-10-13)
@@ -41,7 +42,7 @@ None.
 | Security | Passed | 0 Critical / 0 High / 1 Medium / 3 Low |
 | Senior code review | Approved | 0 Critical / 0 High / 2 Medium / 4 Low |
 
-Verdict: **Approved**. Open non-blocking items: QA M1 no test for an explicit transaction rollback (the hook runs after the real commit only because no handler opens a transaction), L1 2 s cap untested, L2 no test that the broadcast `commentCount` excludes internal comments, L3 no tests for `AttachmentAdded`/null reader, L4 sync `SaveChanges` blocks on the async dispatch; SEC-1 (Medium) `incident:{id}` watchers keep receiving after an incident moves to another team (extends the 09_01 stale-membership decision), SEC-2/QA L5 a timed-out dispatch is not cancelled (pass a `CancellationTokenSource(Timeout)` token), SEC-3 internal routing trusts the event flag instead of the stored row, SEC-4 transitive MessagePack; code review M1 `IAppTeamReader.GetOwningTeamIdAsync` has no caller, M2 one failing send in `HubPostCommitDispatcher` skips the remaining messages and the dashboard notify, L1 summary and owning team take two queries (spec says one), L2 the old team is not told that an incident left it, L3 timer and scope per leading edge while the reader is the null-object, L4 `AppDbContext` needs an `IPostCommitDispatcher` registration from the host. The cause of the 16 transient failures in one earlier full run was not found (not reproduced in two reruns).
+Verdict: **Approved**. Open non-blocking items: QA M1 no test for an explicit transaction rollback (the hook runs after the real commit only because no handler opens a transaction), L4 sync `SaveChanges` blocks on the async dispatch; SEC-1 (Medium) `incident:{id}` watchers keep receiving after an incident moves to another team (extends the 09_01 stale-membership decision), SEC-4 transitive MessagePack; L1 summary and owning team take two queries (spec says one), L2 the old team is not told that an incident left it, L3 timer and scope per leading edge while the reader is the null-object. Fixed after the review: code review M1 (`IAppTeamReader.GetOwningTeamIdAsync` removed, it had no caller) and M2 (`HubPostCommitDispatcher` notifies dashboards first, sends every message and throws the collected failures; new `HubPostCommitDispatcherTests`). Second small batch fixed: SEC-2/QA L5 (the 2 s cap now cancels the dispatch token), SEC-3 (internal if the event or the stored row says so), QA L1/L2/L3 (tests), code review L4 (default no-op `IPostCommitDispatcher` in Infrastructure; the Worker class was removed). Still open: QA M1, L4; SEC-1, SEC-4; code review L1, L2, L3. The cause of the 16 transient failures in one earlier full run was not found (not reproduced in two reruns).
 
 ### Previous implementation (08_03)
 Approved (QA 1211/1211, security 2 Low, code review 5 Low, fixes applied; 1213 tests green); committed as `afcee75`.
@@ -93,6 +94,8 @@ Approved (QA 673/673, security 1 Low, code review 4 Low); committed as `a2bba9d`
 Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Low); committed as `7656473`. Open non-blocking items: L1 stock `RequestSizeLimit` filter may log a "could not apply limit" warning on requests with an `Idempotency-Key`; L2 bodies over 30 KB are buffered to a temp file; Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default.
 
 ## Log
+- 2026-10-14 · 09_02 · Fixed · SEC-2/L5 dispatch cancelled at the cap, SEC-3 stored-row routing, QA L1/L2/L3 tests, code review L4 default dispatcher; 500 integration + 90 Api/205 Application unit tests green, format clean.
+- 2026-10-13 · 09_02 · Fixed · Review code-review M1 (unused `GetOwningTeamIdAsync` removed) and M2 (failure isolation in `HubPostCommitDispatcher`); build, unit and integration tests green (499 integration, 84 Api.UnitTests).
 - 2026-10-13 · 09_02 · Reviewed · Approved — QA 1241/1241 (1 Medium, 5 Low), security 0 Critical/High (1 Medium, 3 Low), code review 2 Medium / 4 Low.
 - 2026-10-13 · 09_02 · Done · Post-commit hook, broadcasts and dashboard throttle; integration 499 + unit tests green with Docker; review pending.
 - 2026-10-13 · 09_02 · Blocked · Code and tests complete, unit tests green; integration run waits for Docker.

@@ -98,6 +98,17 @@ public sealed class IncidentBroadcasterTests
     }
 
     [Fact]
+    public async Task Map_StoredCommentInternalButEventSaysPublic_TargetsRespondersOnly()
+    {
+        var comment = GivenComment(isInternal: true);
+
+        var plan = await Sut.PlanAsync([new CommentAdded(_incidentId, comment.Id, false, null, Now)], default);
+
+        var message = plan.Messages.Should().ContainSingle().Which.Should().BeOfType<CommentAddedMessage>().Subject;
+        message.Targets.Should().Equal(new BroadcastTarget(BroadcastAudience.Responders, _teamId));
+    }
+
+    [Fact]
     public async Task Map_UnknownIncident_SendsNothing()
     {
         _reader.GetIncidentAsync(_incidentId, Arg.Any<CancellationToken>()).Returns((BroadcastIncident?)null);

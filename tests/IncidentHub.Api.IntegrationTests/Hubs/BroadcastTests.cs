@@ -219,6 +219,20 @@ public sealed class BroadcastTests(ApiFactory factory)
         (await WaitForAsync(watcher.Updated, u => u.Id == s.Id)).Number.Should().Be(s.Number);
     }
 
+    [Fact]
+    public async Task Patch_AfterInternalComment_BroadcastCommentCountExcludesIt()
+    {
+        var s = await SeedAsync();
+        (await s.Client.PostAsJsonAsync($"/api/v1/incidents/{s.Id}/comments", new { body = "<p>Internal note</p>", isInternal = true }))
+            .StatusCode.Should().Be(HttpStatusCode.Created);
+        await using var watcher = await WatcherAsync(s);
+
+        var response = await PatchAsync(s.Client, s.Id, new { title = $"Renamed {Guid.NewGuid():N}" }, await ETagAsync(s.Client, s.Number));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await WaitForAsync(watcher.Updated, u => u.Id == s.Id)).CommentCount.Should().Be(0, "the summary reaches Reporters, who never count internal comments");
+    }
+
     private sealed class ThrowingDispatcher : IPostCommitDispatcher
     {
         public Task DispatchAsync(IReadOnlyList<IDomainEvent> events, CancellationToken cancellationToken) =>

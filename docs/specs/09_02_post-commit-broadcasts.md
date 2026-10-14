@@ -20,7 +20,7 @@ In scope:
 ## 3. Design
 
 ### Application
-- `Abstractions/IAppTeamReader`: add `GetOwningTeamIdAsync(Guid applicationId, CancellationToken)` (moved here from 09_01).
+- ~~`Abstractions/IAppTeamReader`: add `GetOwningTeamIdAsync`~~ — not added (decision 9): `IncidentBroadcastReader` reads the owning team itself.
 - `Abstractions/IPostCommitDispatcher` — `Task DispatchAsync(IReadOnlyList<IDomainEvent> events, CancellationToken ct)`. Implemented in Api (it needs the hub context); the Worker registers a no-op.
 - `Abstractions/IDashboardSummaryReader` — `Task<DashboardSummaryDto> GetAsync(Guid teamId, CancellationToken ct)`. No production implementation in BE-09 (BE-11 supplies it); a registered null-object leaves `DashboardChanged` unsent until then.
 - `Realtime/IncidentBroadcaster` (Application, pure orchestration, unit-testable with fakes): maps an event to (DTO, target groups) — see §4 table — using a read port `IIncidentBroadcastReader` that returns, for an incident id, its `IncidentSummaryDto` and `OwningTeamId` (same projection as the list; one query).
@@ -103,3 +103,6 @@ No REST change. Event → recipients (all after commit):
 6. Broadcast summaries carry the public `commentCount` (internal comments excluded) because they reach Reporters.
 7. `AttachmentAdded` broadcasts nothing: files arrive with `IncidentCreated` (report) or `CommentAdded.comment.attachments`.
 8. `IDashboardSummaryReader.GetAsync` returns `DashboardSummaryDto?`; the null-object returns `null`, which means "send nothing".
+9. Code review M1: `IAppTeamReader.GetOwningTeamIdAsync` was dropped because nothing calls it (the broadcast reader has its own query).
+10. Code review M2: `HubPostCommitDispatcher` notifies the dashboards first and sends every message even if one fails; the failures are collected and thrown together so `PostCommitHook` still logs them.
+11. Security SEC-2 / QA L5: the 2 s cap cancels the dispatch token instead of only stopping the wait. SEC-3: a comment is routed as internal when the event or the stored row says so. Code review L4: Infrastructure registers a default no-op dispatcher (`TryAddSingleton`), which the Api replaces; the Worker relies on the default.

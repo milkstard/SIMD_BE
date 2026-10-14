@@ -23,27 +23,42 @@ public sealed class HubPostCommitDispatcher(
             plan = await scope.ServiceProvider.GetRequiredService<IncidentBroadcaster>().PlanAsync(events, cancellationToken);
         }
 
-        foreach (var message in plan.Messages)
-        {
-            var clients = hub.Clients.Groups(message.Targets.Select(ToGroup).ToList());
-            switch (message)
-            {
-                case IncidentCreatedMessage created:
-                    await clients.IncidentCreated(created.Incident);
-                    break;
-                case IncidentUpdatedMessage updated:
-                    await clients.IncidentUpdated(updated.Incident);
-                    break;
-                case CommentAddedMessage comment:
-                    await clients.CommentAdded(comment.Event);
-                    break;
-            }
-        }
-
+        // Dashboards first: Notify is synchronous and cheap, and must not be lost to a failing send below.
         foreach (var teamId in plan.DashboardTeamIds)
         {
             dashboard.Notify(teamId);
         }
+
+        // One failing send must not drop the rest of the save's broadcasts: collect, then fail once so the caller still logs it.
+        List<Exception>? failures = null;
+        foreach (var message in plan.Messages)
+        {
+            try
+            {
+                await SendAsync(message);
+            }
+            catch (Exception ex)
+            {
+                (failures ??= []).Add(ex);
+            }
+        }
+
+        if (failures is not null)
+        {
+            throw new AggregateException(failures);
+        }
+    }
+
+    private Task SendAsync(BroadcastMessage message)
+    {
+        var clients = hub.Clients.Groups(message.Targets.Select(ToGroup).ToList());
+        return message switch
+        {
+            IncidentCreatedMessage created => clients.IncidentCreated(created.Incident),
+            IncidentUpdatedMessage updated => clients.IncidentUpdated(updated.Incident),
+            CommentAddedMessage comment => clients.CommentAdded(comment.Event),
+            _ => Task.CompletedTask,
+        };
     }
 
     private static string ToGroup(BroadcastTarget target) => target.Audience switch

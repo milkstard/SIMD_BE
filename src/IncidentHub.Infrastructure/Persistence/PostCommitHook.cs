@@ -24,10 +24,12 @@ public sealed class PostCommitHook(IPostCommitDispatcher dispatcher, TimeProvide
         using var activity = InfrastructureTelemetry.Source.StartActivity("post_commit.dispatch");
         activity?.SetTag("events.count", events.Count);
 
+        // Deliberately not tied to the request's token: the request may end while the write stays committed.
+        // The timeout cancels the dispatch itself, so a stalled backplane or database does not leave work holding a connection.
+        using var timeout = new CancellationTokenSource(Timeout, time);
         try
         {
-            // Deliberately not tied to the request's token: the request may end while the write stays committed.
-            await dispatcher.DispatchAsync(events, CancellationToken.None).WaitAsync(Timeout, time);
+            await dispatcher.DispatchAsync(events, timeout.Token).WaitAsync(timeout.Token);
         }
         catch (Exception ex)
         {

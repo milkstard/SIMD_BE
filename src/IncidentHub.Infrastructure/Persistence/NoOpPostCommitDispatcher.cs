@@ -1,9 +1,9 @@
 using IncidentHub.Application.Abstractions;
 using IncidentHub.Domain.Common;
 
-namespace IncidentHub.Worker.Identity;
+namespace IncidentHub.Infrastructure.Persistence;
 
-/// <summary>The Worker pushes nothing to SignalR clients; the Api owns the hub.</summary>
+/// <summary>Default when a host registers no dispatcher of its own (the Worker pushes nothing to SignalR; the Api replaces it with the hub dispatcher).</summary>
 public sealed class NoOpPostCommitDispatcher : IPostCommitDispatcher
 {
     public Task DispatchAsync(IReadOnlyList<IDomainEvent> events, CancellationToken cancellationToken) => Task.CompletedTask;

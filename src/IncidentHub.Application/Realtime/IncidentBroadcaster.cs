@@ -72,7 +72,8 @@ public sealed class IncidentBroadcaster(IIncidentBroadcastReader reader)
             }
 
             // An internal comment never goes to the incident group: Reporters can be in it.
-            var target = added.IsInternal
+            // Either flag makes it internal: the stored row wins over the event if they ever disagree.
+            var target = added.IsInternal || comment.IsInternal
                 ? new BroadcastTarget(BroadcastAudience.Responders, incident.OwningTeamId)
                 : new BroadcastTarget(BroadcastAudience.Incident, added.IncidentId);
             messages.Add(new CommentAddedMessage(new CommentAddedEvent(added.IncidentId, comment), [target]));
