@@ -240,7 +240,7 @@ Transactional outbox — written in the same `SaveChangesAsync` as the triggerin
 | `OccurredAt` | `datetimeoffset` | not null |
 | `ProcessedAt` | `datetimeoffset` | nullable — null = undispatched |
 | `Attempts` | `int` | not null, default `0` |
-| `Error` | `nvarchar(max)` | nullable — last failure message (the dispatcher keeps at most 2,000 characters) |
+| `Error` | `nvarchar(max)` | nullable — last failure message (the dispatcher keeps at most 2,000 characters). A row marked processed because no handler wants its type carries `No handler registered.` here, so an operator can tell it from a delivered one |
 | `NextAttemptAt` | `datetimeoffset` | nullable — earliest time the dispatcher may retry after a failure; null = now |
 
 `Attempts` at the configured maximum (`Outbox:Dispatcher:MaxAttempts`, default 8) means the message is **parked**: it is no longer claimed and `ProcessedAt` stays null, so an operator can find it with its last `Error`.

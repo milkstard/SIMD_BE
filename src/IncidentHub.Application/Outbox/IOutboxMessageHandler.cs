@@ -4,7 +4,8 @@ namespace IncidentHub.Application.Outbox;
 
 /// <summary>
 /// Reacts to one kind of outbox message (email, in-app, Teams, ...). A message may have several handlers; the dispatcher runs all of
-/// them. Delivery is at-least-once, so a handler is idempotent by <c>outboxMessageId</c> as far as its channel allows.
+/// them. Register a handler as a <i>keyed</i> service (<c>AddKeyedScoped&lt;IOutboxMessageHandler, T&gt;(eventType)</c>, key =
+/// <see cref="EventType"/>): the dispatcher resolves only the handlers of the message's type. Delivery is at-least-once, so a handler is idempotent by <c>outboxMessageId</c> as far as its channel allows.
 /// Throw to request a retry, <see cref="NonRetryableOutboxException"/> for a failure no retry can fix; returning normally means
 /// done or deliberately skipped.
 /// <para>

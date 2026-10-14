@@ -26,6 +26,9 @@ public sealed class OutboxDispatchRunner(
     TimeProvider time,
     ILogger<OutboxDispatchRunner> logger) : IOutboxDispatchRunner
 {
+    /// <summary>Stored in <c>OutboxMessages.Error</c> of a row marked processed because no handler wants its type.</summary>
+    public const string NoHandlerNote = "No handler registered.";
+
     private readonly OutboxDispatcherOptions _options = options.Value;
 
     public async Task<int> RunOnceAsync(CancellationToken cancellationToken)
@@ -100,14 +103,14 @@ public sealed class OutboxDispatchRunner(
         try
         {
             await using var scope = scopes.CreateAsyncScope();
-            var handlers = scope.ServiceProvider.GetServices<IOutboxMessageHandler>()
-                .Where(h => string.Equals(h.EventType, message.Type, StringComparison.Ordinal))
-                .ToList();
+            // Handlers register keyed by the event type, so only this type's handlers are built: a broken handler of another type
+            // cannot fail this message.
+            var handlers = scope.ServiceProvider.GetKeyedServices<IOutboxMessageHandler>(message.Type).ToList();
 
             if (handlers.Count == 0)
             {
-                // Nothing wants this type yet.
-                message.MarkProcessed(time.GetUtcNow());
+                // Nothing wants this type yet. The marker tells an operator the row was skipped, not delivered.
+                message.MarkProcessed(time.GetUtcNow(), NoHandlerNote);
                 logger.LogInformation("Outbox message {OutboxMessageId} of type {EventType} has no handler and is marked processed", message.Id, message.Type);
                 return;
             }

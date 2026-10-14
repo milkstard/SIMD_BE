@@ -9,8 +9,8 @@ namespace IncidentHub.Infrastructure.Outbox;
 public static class OutboxServiceCollectionExtensions
 {
     /// <summary>
-    /// The dispatch pass and its options (validated when the host starts). Handlers register themselves as
-    /// <see cref="IOutboxMessageHandler"/>; only the Worker hosts the loop.
+    /// The dispatch pass and its options (validated when the host starts). Handlers register themselves as keyed
+    /// <see cref="IOutboxMessageHandler"/> services (key = event type); only the Worker hosts the loop.
     /// </summary>
     public static IServiceCollection AddOutbox(this IServiceCollection services, IConfiguration configuration)
     {

@@ -7,11 +7,43 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
-| Spec | `docs/specs/10_02_email-sender-and-resilience.md` (BE-10, part 2 of 3) |
+| Spec | `docs/specs/10_03_email-triggers.md` (BE-10, part 3 of 3) |
 | State | Done <!-- Planned Â· In progress Â· Blocked Â· Done --> |
 | Started | 2026-10-14 |
 | Last updated | 2026-10-14 |
-| Branch / commit | main / `cd9fae9` (10_01 still uncommitted) |
+| Branch / commit | main / `15a8a4f` (10_03 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (10_03 §9), `DATABASE.md` (`Error` marker), deferred/completed items
+- [x] Application: `IEmailTemplateRenderer` + `RenderedEmail`, `EmailContentBuilder`, `IIncidentEmailReader`/`IncidentEmailReader`, `EmailDelivery`, `IncidentReported`/`IncidentAssigned`/`IncidentResolved` email handlers
+- [x] Infrastructure: renderer implements the port, handlers + reader registered keyed by event type in `AddNotificationSenders`; SEC-A (`GetKeyedServices` per message type) and SEC-B (`NoHandlerNote`) in `OutboxDispatchRunner`/`OutboxMessage`
+- [x] Worker: nothing beyond DI
+- [x] Tests written: `EmailContentBuilderTests`, three handler test classes, `EmailContentRenderingTests`, `NotificationLayeringTests` (Api + Worker), `EmailDispatchTests` (integration, Mailpit), runner tests moved to keyed handlers (+ broken-handler-of-another-type case, no-handler marker)
+- [x] Build, format, unit tests
+- [x] Integration tests run with Docker
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` clean.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 456, Application 259, Worker 4, Api.UnitTests 152 passed, 0 failed.
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 535/535 passed (new `EmailDispatchTests` 9 with Mailpit, runner tests updated for keyed handlers).
+- `contracts/swagger.json` unchanged (no endpoint or DTO change).
+
+### Decisions (2026-10-14)
+See spec 10_03 §9: open questions 1-5 accepted as proposed; SEC-A and SEC-B from the 10_02 review done here; the renderer port lives in Application.
+
+### Blockers / open questions
+None.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1406/1406 passed (integration 535 incl. Mailpit), 0 proposed tests required, 5 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 3 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 5 Low |
+
+Verdict: **Approved**. Open non-blocking items: SEC-1 CR/LF in an incident title can forge lines in the plain-text body (collapse line breaks in the title fact); SEC-2 the Assigned mail goes to the event's assignee without checking the incident's current assignee (add `AssigneeId` to `IncidentEmailFacts` and skip when it differs); SEC-3 `LoggingEmailSender` logs the full subject (10_02 SEC-5); code review L1 the Resolved mail shows the send-time `Status`, which can contradict "Resolved" after a delayed retry, L2 `EmailDelivery` uses `Single` on the senders so a missing sender is retried 8 times (resolve once or throw `NonRetryableOutboxException`), L3 `EmailContent.Headline` always equals `Subject` (YAGNI), L4 keyed handlers use `AddKeyedScoped` instead of an idempotent add, L5 `MarkProcessed` leaves an earlier `Error` and the field now means both "last failure" and "skipped"; QA Lows: the SMTP-outage test advances the clock a fixed 2 min (use `NextAttemptAt`), no integration test that a skipped message does not block the next, no explicit team-only assignment unit test.
+
+## Previous implementation (10_02)
 
 ### Progress
 - [x] Docs/tracking: spec decisions (10_02 §9), `CLAUDE.md` Mailpit/config notes, 10_01 HandlerTimeout 60 s
@@ -192,6 +224,11 @@ Approved (QA 673/673, security 1 Low, code review 4 Low); committed as `a2bba9d`
 Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Low); committed as `7656473`. Open non-blocking items: L1 stock `RequestSizeLimit` filter may log a "could not apply limit" warning on requests with an `Idempotency-Key`; L2 bodies over 30 KB are buffered to a temp file; Teams/Applications creates without an `Idempotency-Key` still use Kestrel's 30 MB default.
 
 ## Log
+
+- 2026-10-14 · 10_03 · Reviewed · Approved · QA 1406/1406 (5 Low), security 0 Critical/High/Medium (3 Low), code review 5 Low.
+- 2026-10-14 · 10_03 · Done · Email triggers, SEC-A, SEC-B; 535 integration + 871 unit tests green with Docker, format clean; review pending.
+- 2026-10-14 · 10_03 · Blocked · Email handlers (reported, assigned, resolved), keyed handler resolution (SEC-A), no-handler marker (SEC-B); build, format and 871 unit tests green; integration run waits for Docker.
+- 2026-10-14 · 10_03 · In progress · Started; email triggers on the outbox, pulls in SEC-A/SEC-B from the 10_02 review.
 - 2026-10-14 · 10_02 · Fixed · Review SEC-1 (Tls mode, no credentials in clear text), SEC-2 (no inner exception), L1 (bounded disconnect); build, format, unit and Mailpit tests green.
 - 2026-10-14 · 10_02 · Reviewed · Approved — QA 1356/1356 (2 Low), security 0 Critical/High (1 Medium, 4 Low), code review 5 Low.
 - 2026-10-14 · 10_02 · Done · Email sender (MailKit), Polly pipeline, Mailpit, SEC-E; 831 unit + 47 integration (Mailpit + outbox) green, format clean; review pending.

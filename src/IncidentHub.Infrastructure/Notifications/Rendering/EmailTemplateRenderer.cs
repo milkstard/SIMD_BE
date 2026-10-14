@@ -1,13 +1,13 @@
 using System.Text;
 using System.Text.Encodings.Web;
+using IncidentHub.Application.Abstractions;
+using IncidentHub.Application.Notifications;
 using Microsoft.Extensions.Options;
 
 namespace IncidentHub.Infrastructure.Notifications.Rendering;
 
-public sealed record RenderedEmail(string Text, string Html);
-
 /// <summary>Plain string templates (no Razor). Every dynamic value is HTML-encoded in the HTML part.</summary>
-public sealed class EmailTemplateRenderer(IOptions<EmailOptions> options)
+public sealed class EmailTemplateRenderer(IOptions<EmailOptions> options) : IEmailTemplateRenderer
 {
     private readonly string _baseUrl = options.Value.PublicBaseUrl.Trim().TrimEnd('/');
 

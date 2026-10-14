@@ -1,6 +1,6 @@
 # Spec 10_03: Email triggers (created, assigned, resolved)
 
-> Status: **Draft** · Source: BE-10 in docs/BACKEND-SPECS.md · Part 3 of 3
+> Status: **Implemented (review pending)** · Source: BE-10 in docs/BACKEND-SPECS.md · Part 3 of 3
 
 ## 1. Purpose & scope
 
@@ -100,3 +100,12 @@ None. `API-CONTRACT.md` and `swagger.json` unchanged.
 3. **Event-time vs send-time data:** events carry ids only (05_01/08_01 decision), so titles, status and addresses are read when the mail is built. A retry hours later may show newer data (e.g. a changed title). Accepted; the alternative is widening the event payloads, a Domain change.
 4. **Webhook incidents:** `IncidentReported` with `Source = Webhook` (BE-17) will mail the owning team like a manual one. Assumed intended.
 5. **Team without an address:** `Teams.Email` is required in the schema, so a missing address is treated as a data error (warning + skip), not a retry.
+
+## 9. Decisions (2026-10-14)
+
+1. **Open questions 1-5 accepted as proposed:** the handlers email regardless of `Users.NotificationPrefs` (BE-13 honours it); the actor is never mailed about their own action; data is read when the mail is built; webhook incidents mail the owning team like manual ones; a team or user without an address is a `Warning` (ids only) and a skip, not a retry.
+2. **SEC-A (carried from 10_02) done here:** handlers register as *keyed* `IOutboxMessageHandler` services (key = event type) and `OutboxDispatchRunner` resolves only `GetKeyedServices<IOutboxMessageHandler>(message.Type)`. A handler of another type that cannot be built no longer fails the message.
+3. **SEC-B (carried from 10_02) done here:** a row marked processed because no handler wants its type stores `No handler registered.` in `OutboxMessages.Error` (`OutboxMessage.MarkProcessed(at, note)`, `OutboxDispatchRunner.NoHandlerNote`). No schema change.
+4. **Layering:** Application cannot see `EmailTemplateRenderer` (Infrastructure, needs `EmailOptions.PublicBaseUrl`), so `IEmailTemplateRenderer` and `RenderedEmail` live in Application and the renderer implements the port. Wording is a pure `EmailContentBuilder`; reads go through `IIncidentEmailReader` (`IncidentEmailReader` over `IAppDbContext`) so the handlers are unit-tested with fakes; `EmailDelivery` renders and hands the `Notification` to the email sender (`MessageId` = outbox id).
+5. **Registration:** the handlers, reader and `EmailDelivery` are registered by `AddNotificationSenders` (Worker only), not by `AddOutbox`, so the API has neither handlers nor sender (`Api_DoesNotRegisterEmailHandlersOrSender`).
+6. **Test plan deviations:** handler tests use a fake `IIncidentEmailReader` instead of the SQL container (the reader is covered by the integration tests); `Build_TitleWithMarkup_IsEncoded` runs the builder through the real renderer in `Api.UnitTests`; "SMTP down" is a closed port during the first pass and Mailpit afterwards (stopping the container would change its mapped port); the architecture check is split between `Api.UnitTests` (Application, Infrastructure, Api) and `Worker.UnitTests` (Worker).

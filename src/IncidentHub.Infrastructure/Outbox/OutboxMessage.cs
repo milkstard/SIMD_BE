@@ -33,8 +33,18 @@ public sealed class OutboxMessage
     /// <summary>Earliest time the dispatcher may try again after a failure; null = now.</summary>
     public DateTimeOffset? NextAttemptAt { get; private set; }
 
-    /// <summary>Done, or deliberately skipped because nothing handles this type.</summary>
-    public void MarkProcessed(DateTimeOffset at) => ProcessedAt = at;
+    /// <summary>
+    /// Done, or deliberately skipped because nothing handles this type. A <paramref name="note"/> (e.g. "no handler") is kept in
+    /// <c>Error</c> so an operator can tell a skipped row from a delivered one.
+    /// </summary>
+    public void MarkProcessed(DateTimeOffset at, string? note = null)
+    {
+        ProcessedAt = at;
+        if (note is not null)
+        {
+            Error = Truncate(note);
+        }
+    }
 
     public void MarkFailed(string error, DateTimeOffset nextAttemptAt)
     {

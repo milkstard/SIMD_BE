@@ -14,9 +14,8 @@ Rules:
 | `SlaPolicies` table | 04_02 | BE-12 | |
 | `Notifications` table | 04_02 | BE-14 | |
 | `IncidentDailyStats` table | 04_02 | BE-15 | |
-| Dispatch `IncidentReported` outbox rows (email to the owning team) | 05_01 | BE-10 | Table and same-transaction write are built in 05_01; BE-10 keeps only the dispatcher |
 | Replace config-backed `ISlaPolicyProvider` (`Sla:Defaults`) with the `SlaPolicies` table | 05_01 | BE-12 | Callers already use the async provider |
-| Notification delivery for `IncidentTransitioned` / `IncidentAssigned` / `IncidentUpdated` / `CommentAdded` / `AttachmentAdded` outbox rows (rows are written by 07_02/07_03/08_01/08_03) | 07_02, 07_03, 08_01, 08_03 | BE-10 (email), BE-13, BE-14 | Only the rows are produced in BE-07/BE-08. Spec 10_03 pulls in the BE-10 email for `IncidentAssigned` and Resolved transitions; the rest stays here |
+| Notification delivery for `IncidentTransitioned` / `IncidentAssigned` / `IncidentUpdated` / `CommentAdded` / `AttachmentAdded` outbox rows (rows are written by 07_02/07_03/08_01/08_03) | 07_02, 07_03, 08_01, 08_03 | BE-13, BE-14 | Only the rows are produced in BE-07/BE-08. Spec 10_03 delivered the BE-10 email for `IncidentAssigned` and Resolved transitions; the rest stays here |
 | Rate limiting on `POST /incidents`, `GET /incidents/similar`, `POST /attachments` and `POST /incidents/{id}/comments` | 05_02, 06_01, 08_01, 08_02 | Unassigned (cross-cutting security) | No BE item owns it yet; `similar` is called while the user types |
 | `@mention` parsing in comment bodies and `Mentioned` notifications | 08_01 | BE-14 | |
 | `DashboardChanged` payload: production `IDashboardSummaryReader` (BE-09 builds the 1/s throttle and the port only) | 09_02 | BE-11 | |

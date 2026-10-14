@@ -198,6 +198,26 @@ public sealed class OutboxDispatchRunnerTests(ApiFactory factory) : IAsyncLifeti
 
         var row = await LoadAsync(id);
         row.ProcessedAt.Should().NotBeNull();
+        row.Error.Should().Be(OutboxDispatchRunner.NoHandlerNote);
+    }
+
+    [Fact]
+    public async Task RunOnce_BrokenHandlerOfAnotherType_DoesNotFailThisType()
+    {
+        var id = await SeedAsync();
+        var handler = new RecordingHandler();
+        var services = new ServiceCollection();
+        services.AddKeyedSingleton<IOutboxMessageHandler>(nameof(IncidentReported), handler);
+        services.AddKeyedScoped<IOutboxMessageHandler>(
+            nameof(CommentAdded),
+            (_, _) => throw new InvalidOperationException("cannot build"));
+
+        await using var db = NewContext();
+        await NewRunner(db, services, new OutboxDispatcherOptions()).RunOnceAsync(CancellationToken.None);
+
+        handler.Calls.Should().Be(1);
+        var row = await LoadAsync(id);
+        row.ProcessedAt.Should().NotBeNull();
         row.Error.Should().BeNull();
     }
 
@@ -464,7 +484,7 @@ public sealed class OutboxDispatchRunnerTests(ApiFactory factory) : IAsyncLifeti
         await SeedAsync(T0.AddMinutes(-2));
         await SeedAsync(T0.AddMinutes(-1));
         var instances = new List<RecordingHandler>();
-        var services = new ServiceCollection().AddScoped<IOutboxMessageHandler>(_ =>
+        var services = new ServiceCollection().AddKeyedScoped<IOutboxMessageHandler>(nameof(IncidentReported), (_, _) =>
         {
             var created = new RecordingHandler();
             instances.Add(created);
@@ -499,7 +519,7 @@ public sealed class OutboxDispatchRunnerTests(ApiFactory factory) : IAsyncLifeti
         var services = new ServiceCollection();
         if (handler is not null)
         {
-            services.AddSingleton(handler);
+            services.AddKeyedSingleton(handler.EventType, handler);
         }
 
         return NewRunner(db, services, options);

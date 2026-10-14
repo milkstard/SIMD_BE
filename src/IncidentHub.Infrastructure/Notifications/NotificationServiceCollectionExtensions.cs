@@ -1,4 +1,7 @@
 using IncidentHub.Application.Abstractions;
+using IncidentHub.Application.Notifications.Email;
+using IncidentHub.Application.Outbox;
+using IncidentHub.Domain.Incidents.Events;
 using IncidentHub.Infrastructure.Notifications.Rendering;
 using IncidentHub.Infrastructure.Notifications.Resilience;
 using Microsoft.Extensions.Configuration;
@@ -38,6 +41,14 @@ public static class NotificationServiceCollectionExtensions
                 context.ServiceProvider.GetRequiredService<IOptions<NotificationResilienceOptions>>().Value));
 
         services.TryAddSingleton<EmailTemplateRenderer>();
+        services.TryAddSingleton<IEmailTemplateRenderer>(sp => sp.GetRequiredService<EmailTemplateRenderer>());
+
+        // The email triggers. Keyed by the event type they handle, so the dispatcher builds only the handlers a message needs.
+        services.TryAddScoped<IIncidentEmailReader, IncidentEmailReader>();
+        services.TryAddScoped<EmailDelivery>();
+        services.AddKeyedScoped<IOutboxMessageHandler, IncidentReportedEmailHandler>(nameof(IncidentReported));
+        services.AddKeyedScoped<IOutboxMessageHandler, IncidentAssignedEmailHandler>(nameof(IncidentAssigned));
+        services.AddKeyedScoped<IOutboxMessageHandler, IncidentResolvedEmailHandler>(nameof(IncidentTransitioned));
 
         if (configuration.GetValue<bool>($"{EmailOptions.SectionName}:Enabled"))
         {

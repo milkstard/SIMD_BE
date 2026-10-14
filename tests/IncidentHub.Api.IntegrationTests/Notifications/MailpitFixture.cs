@@ -53,6 +53,16 @@ public sealed class MailpitFixture : IAsyncLifetime
         throw new TimeoutException($"No message with subject containing '{subjectFragment}' reached Mailpit.");
     }
 
+    /// <summary>Every message whose subject contains <paramref name="subjectFragment"/> right now (no waiting): subject and first recipient.</summary>
+    public async Task<IReadOnlyList<(string Subject, string To)>> ListAsync(string subjectFragment)
+    {
+        using var search = JsonDocument.Parse(
+            await _http.GetStringAsync($"{ApiBase}/search?query={Uri.EscapeDataString($"subject:\"{subjectFragment}\"")}&limit=200"));
+        return search.RootElement.GetProperty("messages").EnumerateArray()
+            .Select(m => (m.GetProperty("Subject").GetString()!, m.GetProperty("To")[0].GetProperty("Address").GetString()!))
+            .ToList();
+    }
+
     /// <summary>Returns the raw header map of a message (header name to values).</summary>
     public async Task<JsonDocument> GetHeadersAsync(string messageId) =>
         JsonDocument.Parse(await _http.GetStringAsync($"{ApiBase}/message/{messageId}/headers"));
