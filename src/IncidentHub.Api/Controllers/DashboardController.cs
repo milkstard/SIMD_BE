@@ -1,6 +1,7 @@
 using IncidentHub.Api.Auth;
 using IncidentHub.Application.Dashboard.Dtos;
 using IncidentHub.Application.Dashboard.GetAppStatus;
+using IncidentHub.Application.Dashboard.GetDashboardSummary;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,4 +17,9 @@ public sealed class DashboardController(ISender sender) : ControllerBase
     [ProducesResponseType<IReadOnlyList<AppStatusItemDto>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<AppStatusItemDto>>> GetAppStatus(CancellationToken cancellationToken) =>
         Ok(await sender.Send(new GetAppStatusQuery(), cancellationToken));
+
+    [HttpGet("summary")]
+    [ProducesResponseType<DashboardSummaryDto>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<DashboardSummaryDto>> GetSummary([FromQuery] string? range, CancellationToken cancellationToken) =>
+        Ok(await sender.Send(new GetDashboardSummaryQuery(range), cancellationToken));
 }

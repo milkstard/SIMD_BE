@@ -13,7 +13,7 @@ public sealed class HubDashboardBroadcaster(
         using var scope = scopes.CreateScope();
         var summary = await scope.ServiceProvider.GetRequiredService<IDashboardSummaryReader>().GetAsync(teamId, cancellationToken);
 
-        // No reader until BE-11: nothing to send.
+        // The Worker host keeps the null reader and never broadcasts; a null summary means there is nothing to send.
         if (summary is not null)
         {
             await hub.Clients.Group(HubGroups.Dashboard(teamId)).DashboardChanged(summary);

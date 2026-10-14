@@ -42,6 +42,7 @@ public static class DependencyInjection
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IAppTeamReader, RedisAppTeamReader>();
         services.AddScoped<IAppStatusReader, RedisAppStatusReader>();
+        services.AddScoped<IDashboardSummaryProvider, RedisDashboardSummaryProvider>();
         services.AddScoped<IIdempotencyStore, RedisIdempotencyStore>();
         services.AddScoped<IUserDirectory, UserDirectory>();
         services.AddScoped<ISimilarIncidentSearch, SqlSimilarIncidentSearch>();

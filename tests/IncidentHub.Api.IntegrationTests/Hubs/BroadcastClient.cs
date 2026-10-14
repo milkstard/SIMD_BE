@@ -25,6 +25,7 @@ internal sealed class BroadcastClient : IAsyncDisposable
         connection.On<IncidentSummaryDto>("IncidentUpdated", e => Add(Updated, e));
         connection.On<CommentAddedEvent>("CommentAdded", e => Add(Comments, e));
         connection.On<AppStatusItemDto>("AppStatusChanged", e => Add(AppStatuses, e));
+        connection.On<DashboardSummaryDto>("DashboardChanged", e => Add(Dashboards, e));
     }
 
     public List<IncidentSummaryDto> Created { get; } = [];
@@ -34,6 +35,8 @@ internal sealed class BroadcastClient : IAsyncDisposable
     public List<CommentAddedEvent> Comments { get; } = [];
 
     public List<AppStatusItemDto> AppStatuses { get; } = [];
+
+    public List<DashboardSummaryDto> Dashboards { get; } = [];
 
     /// <summary>Connects as the user and joins the dashboards of their teams; the call returns once the connection groups are live.</summary>
     public static async Task<BroadcastClient> ConnectAsync(

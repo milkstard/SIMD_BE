@@ -7,6 +7,46 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/11_02_dashboard-summary.md` (BE-11, part 2 of 3) |
+| State | Done <!-- Planned - In progress - Blocked - Done --> |
+| Started | 2026-10-14 |
+| Last updated | 2026-10-14 |
+| Branch / commit | main / `79750c7` (11_02 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (11_02 section 9), `API-CONTRACT.md` (summary definitions, `DashboardChanged` payload), deferred/completed items, `contracts/swagger.json` regenerated (+152 lines, additive)
+- [x] Application: `DashboardRange`, `IDashboardSummaryProvider`, `DashboardSummaryQueries`, `GetDashboardSummary` query/validator/handler, `DashboardSummaryReader` (recompute + overwrite for the push)
+- [x] Infrastructure: `RedisDashboardSummaryProvider` (5 s TTL, `SET NX` stampede guard, Redis errors logged and bypassed, span `dashboard.summary`)
+- [x] Api: `DashboardController.GetSummary`; the API host replaces the null `IDashboardSummaryReader`, the Worker keeps it
+- [x] Tests written: Application unit (`DashboardSummaryTests`), integration `DashboardSummaryTests` (theories included), `BroadcastTests.Report_Committed_DashboardChangedCarriesSummary`, opt-in `DashboardSummaryQueryPlanTests`
+- [x] Build, format, unit tests
+- [x] Full integration suite run with Docker
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` run.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 466, Application 281, Worker 4, Api.UnitTests 155 passed, 0 failed.
+- Integration with Docker, before it stopped: `DashboardSummaryTests` + `Report_Committed_DashboardChangedCarriesSummary` 19/19 passed; `DashboardSummaryQueryPlanTests` passed (open grouping is an index seek on `IX_Incidents_Status_Severity`, no clustered scan; p95 of the uncached 30d summary 197.9 ms on 50k rows). Full suite after `dotnet format`: `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` 568/568 passed.
+- `contracts/swagger.json` regenerated: +152 lines, the new path and schemas only.
+
+### Decisions (2026-10-14)
+See spec 11_02 section 9: window = whole UTC days (1/7/30), the push recomputes and overwrites the cache, MTTA/MTTR averaged in memory (no `DATEDIFF` in Application).
+
+### Blockers / open questions
+None. Review pending (`/review-spec`).
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1474/1474 passed (integration 568), 0 proposed tests required, 6 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 4 Low |
+
+Verdict: **Approved**. Fixed after the review: code review M1 (documented in API-CONTRACT section 7), SEC-1/QA Low-6 (`When.NotExists` on the miss path), L3. Open non-blocking items: SEC-2 no rate limit on a cache-miss endpoint of about 5 queries, and MTTA/MTTR load one row per qualifying incident; L1 day buckets rely on offset-0 storage; L2 the empty-team `Build` call is hard to read; L3 the handler ignores the `TryParse` result (default is `H24`, not `7d`); L4 `DashboardRange`/`DashboardRanges` naming; QA Lows: no `CacheKey` test, no UTC day-boundary, rounding or window-start test, stampede-guard paths untested.
+
+## Previous implementation (11_01)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/11_01_app-status-calculator.md` (BE-11, part 1 of 3) |
 | State | Done <!-- Planned · In progress · Blocked · Done --> |
 | Started | 2026-10-14 |
@@ -267,6 +307,12 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-14 - 11_02 - Fixed - Review SEC-1 (`When.NotExists` on the miss path), code review L3 (`TryParse` falls back to `7d`), M1 (API-CONTRACT section 7 note: multi-team clients refetch); build 0 warnings, format clean, 906 unit + 568 integration tests green with Docker.
+- 2026-10-14 - 11_02 - Reviewed - Approved - QA 1474/1474 (6 Low), security 0 Critical/High/Medium (2 Low), code review 1 Medium / 4 Low.
+- 2026-10-14 - 11_02 - Done - Summary endpoint, Redis provider, real `DashboardChanged` payload; 568 integration + 906 unit tests green with Docker, format clean; review pending.
+- 2026-10-14 - 11_02 - Blocked - Summary endpoint, Redis provider and real `DashboardChanged` payload coded; build, format, unit tests and the new integration tests green; full integration rerun waits for Docker.
+- 2026-10-14 - 11_02 - In progress - Started; pulls in the `DashboardChanged` payload (production `IDashboardSummaryReader`) from deferred items.
+- 2026-10-14 - 11_01 - Committed - `79750c7`.
 - 2026-10-14 · 11_01 · Fixed · Review M1 (status refresh failure no longer drops the save's broadcasts), L1 (documented), L2 (span tags), L4/SEC-1 (`When.NotExists` on the miss path), QA F1/F2 (Closed, Reopened, application-move endpoint tests), F3 recorded in deferred items; unit tests green, 28 related integration tests green, format clean. Not done: L3, L5, SEC-2, environment-edit test (apps only offer Production).
 - 2026-10-14 · 11_01 · Reviewed · Approved ? QA 1436/1436 (3 Low), security 0 Critical/High/Medium (2 Low), code review 1 Medium / 5 Low.
 - 2026-10-14 · 11_01 · Done · Calculator, cached reader, `GET /dashboard/app-status`, `AppStatusChanged`; 546 integration + 890 unit tests green with Docker, format clean; review pending.

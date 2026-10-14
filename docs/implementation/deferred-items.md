@@ -17,7 +17,6 @@ Rules:
 | Notification delivery for `IncidentTransitioned` / `IncidentAssigned` / `IncidentUpdated` / `CommentAdded` / `AttachmentAdded` outbox rows (rows are written by 07_02/07_03/08_01/08_03) | 07_02, 07_03, 08_01, 08_03 | BE-13, BE-14 | Only the rows are produced in BE-07/BE-08. Spec 10_03 delivered the BE-10 email for `IncidentAssigned` and Resolved transitions; the rest stays here |
 | Rate limiting on `POST /incidents`, `GET /incidents/similar`, `POST /attachments` and `POST /incidents/{id}/comments` | 05_02, 06_01, 08_01, 08_02 | Unassigned (cross-cutting security) | No BE item owns it yet; `similar` is called while the user types |
 | `@mention` parsing in comment bodies and `Mentioned` notifications | 08_01 | BE-14 | |
-| `DashboardChanged` payload: production `IDashboardSummaryReader` (BE-09 builds the 1/s throttle and the port only) | 09_02 | BE-11 | |
 | `NotificationReceived` broadcast to `user:{userId}` | 09_01, 09_02 | BE-14 | Group and method exist after 09_01 |
 | Broadcasts for changes made by the Worker/webhook (SLA breach, alert-created incidents) | 09_02 | BE-12, BE-17 | Needs a cross-process path (e.g. Redis pub/sub); BE-09 broadcasts only API-side commits |
 | Honour `User.NotificationPrefs` (a `Teams` preference suppresses the email) in the email handlers | 10_03 | BE-13 | 10_03 emails regardless of the stored preference |

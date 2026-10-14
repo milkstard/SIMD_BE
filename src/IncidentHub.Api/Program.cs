@@ -7,6 +7,7 @@ using IncidentHub.Api.Swagger;
 using IncidentHub.Api.Telemetry;
 using IncidentHub.Application;
 using IncidentHub.Application.Abstractions;
+using IncidentHub.Application.Realtime;
 using IncidentHub.Infrastructure;
 using IncidentHub.Infrastructure.Telemetry;
 using OpenTelemetry.Metrics;
@@ -23,6 +24,7 @@ builder.AddIncidentHubObservability(
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<IDashboardSummaryReader, DashboardSummaryReader>(); // replaces the null object; the Worker keeps it
 
 builder.Services.AddIncidentHubProblemDetails();
 builder.Services.AddIncidentHubAuthentication(builder.Configuration);

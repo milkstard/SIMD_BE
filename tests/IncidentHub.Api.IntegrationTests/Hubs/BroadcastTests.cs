@@ -118,6 +118,21 @@ public sealed class BroadcastTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Report_Committed_DashboardChangedCarriesSummary()
+    {
+        var s = await SeedAsync();
+        await using var member = await ConnectAsync(factory, s.Oid, UserRole.Responder);
+
+        var response = await s.Client.PostAsJsonAsync("/api/v1/incidents", NewIncident(s.AppId, $"Checkout breaks {Guid.NewGuid():N}"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        // The seeded High incident plus the reported one; a summary computed before the commit would say 1.
+        var summary = await WaitForAsync(member.Dashboards, d => d.OpenTotal == 2);
+        summary.Range.Should().Be("7d");
+        summary.OpenByApplication.Should().ContainSingle().Which.Application.Id.Should().Be(s.AppId);
+    }
+
+    [Fact]
     public async Task Report_OtherTeamClient_ReceivesNothing()
     {
         var s = await SeedAsync();

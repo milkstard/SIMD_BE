@@ -742,6 +742,50 @@
         }
       }
     },
+    "/api/v1/dashboard/summary": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummaryDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummaryDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummaryDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (ProblemDetails)"
+          },
+          "403": {
+            "description": "Authenticated but not permitted (ProblemDetails)"
+          }
+        }
+      }
+    },
     "/api/v1/incidents": {
       "post": {
         "tags": [
@@ -3221,6 +3265,79 @@
         },
         "additionalProperties": false
       },
+      "DashboardSummaryDto": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "type": "string",
+            "nullable": true
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "openTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unassigned": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "slaBreached": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "openBySeverity": {
+            "type": "object",
+            "properties": {
+              "Critical": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "High": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "Medium": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "Low": {
+                "type": "integer",
+                "format": "int32"
+              }
+            },
+            "additionalProperties": false,
+            "nullable": true
+          },
+          "openByApplication": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenByApplicationDto"
+            },
+            "nullable": true
+          },
+          "mttaMinutes": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "mttrMinutes": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "trend": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrendPointDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "DuplicateOfDto": {
         "type": "object",
         "properties": {
@@ -3525,6 +3642,23 @@
         },
         "additionalProperties": false
       },
+      "OpenByApplicationDto": {
+        "type": "object",
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/ApplicationRefDto"
+          },
+          "open": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "critical": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "Priority": {
         "enum": [
           "P1",
@@ -3694,6 +3828,24 @@
             "type": "string",
             "format": "uuid",
             "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "TrendPointDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "nullable": true
+          },
+          "reported": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resolved": {
+            "type": "integer",
+            "format": "int32"
           }
         },
         "additionalProperties": false
