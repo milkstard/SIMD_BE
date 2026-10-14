@@ -7,6 +7,46 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/11_03_current-user-and-openapi.md` (BE-11, part 3 of 3) |
+| State | Done <!-- Planned - In progress - Blocked - Done --> |
+| Started | 2026-10-14 |
+| Last updated | 2026-10-14 |
+| Branch / commit | main / `d585515` (11_03 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (11_03 section 9), `API-CONTRACT.md` (`GET /me` notes), `CLAUDE.md` (pipeline diff-check note)
+- [x] Application: `Users/GetCurrentUser` (query, `CurrentUserDto`, handler)
+- [x] Api: `MeController`; Swagger: `SortedDocumentFilter` (paths and schemas), explicit action order, `range` allowed values (`OpenApiAllowedValues`)
+- [x] Tests written: `GetCurrentUserHandlerTests` (3), integration `MeTests` (4), `OpenApiDocumentTests` (5, no Docker)
+- [x] Build, format, unit tests
+- [x] Full integration suite run with Docker
+- [x] `contracts/swagger.json` regenerated; two script runs are byte-identical
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` run.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 466, Application 284, Worker 4, Api.UnitTests 160 passed, 0 failed.
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 572/572 passed (new `MeTests` 4). A first full run failed on SQL connections because the containers exited (Docker dropped, exit 255); the rerun was green.
+- `scripts/generate-openapi.ps1` run twice: identical SHA-1. Semantic diff against the previous file: added `/api/v1/me`, `CurrentUserDto`, `UserRole`; changed only the `range` parameter schema (enum `24h`/`7d`/`30d`, default `7d`); no removals. The textual diff is large because paths and schemas are now sorted (one-time reorder, spec section 9 item 4).
+
+### Decisions (2026-10-14)
+See spec 11_03 section 9: OQ 1-3 accepted as proposed; paths and schemas are sorted explicitly (one-time reorder diff in `swagger.json`).
+
+### Blockers / open questions
+None.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1486/1486 passed (integration 572), 0 proposed tests required, 1 Medium, 7 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 1 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 5 Low |
+
+Verdict: **Approved**. Fixed after the review: code review M1 (the `GET /me` note moved below the table). Open non-blocking items: QA M1 `Generate_MatchesCommittedSwagger` compares the in-process document, not the `dotnet swagger tofile` output (the pipeline `git diff --exit-code` stays the real gate); QA Low-1 no negative test for token roles vs `TeamMembers.Role`; QA Low-3 the committed-swagger test returns instead of reporting Skipped when the file is absent; QA Low-4 `Guid.Order()` is .NET order, not string order; QA Low-5 schema names are `CurrentUserDto`/`UserRole`, the contract says `CurrentUser`/`Role`; QA Low-6 / code review L3 the range tokens are repeated in `DashboardController` and `DashboardRange`; code review L1 tags and enum order are not pinned, L4 role order relies on the enum values, L5 `Get_Admin_ReturnsAdminRole` uses `Contain` instead of `Equal`; SEC-1 pre-existing vulnerable transitive packages (MessagePack, Cryptography.Xml, SignalR.Common, SSH.NET in tests).
+
+## Previous implementation (11_02)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/11_02_dashboard-summary.md` (BE-11, part 2 of 3) |
 | State | Done <!-- Planned - In progress - Blocked - Done --> |
 | Started | 2026-10-14 |
@@ -307,6 +347,10 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-14 - 11_03 - Fixed - Review code-review M1 (`GET /me` note moved below the endpoint table in `API-CONTRACT.md`); `dotnet format --verify-no-changes` clean, OpenAPI tests 5/5, opt-in Performance tests 4/4 with Docker.
+- 2026-10-14 - 11_03 - Reviewed - Approved - QA 1486/1486 (1 Medium, 7 Low), security 0 Critical/High/Medium (1 Low), code review 1 Medium / 5 Low.
+- 2026-10-14 - 11_03 - Done - `GET /me`, sorted and deterministic OpenAPI, `range` enum documented; 572 integration + 914 unit tests green with Docker, format clean; review pending.
+- 2026-10-14 - 11_03 - In progress - Started; `GET /me` and deterministic OpenAPI; no deferred item involved.
 - 2026-10-14 - 11_02 - Fixed - Review SEC-1 (`When.NotExists` on the miss path), code review L3 (`TryParse` falls back to `7d`), M1 (API-CONTRACT section 7 note: multi-team clients refetch); build 0 warnings, format clean, 906 unit + 568 integration tests green with Docker.
 - 2026-10-14 - 11_02 - Reviewed - Approved - QA 1474/1474 (6 Low), security 0 Critical/High/Medium (2 Low), code review 1 Medium / 4 Low.
 - 2026-10-14 - 11_02 - Done - Summary endpoint, Redis provider, real `DashboardChanged` payload; 568 integration + 906 unit tests green with Docker, format clean; review pending.

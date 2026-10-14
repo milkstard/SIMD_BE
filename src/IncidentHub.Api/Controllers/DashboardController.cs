@@ -1,4 +1,5 @@
 using IncidentHub.Api.Auth;
+using IncidentHub.Api.Swagger;
 using IncidentHub.Application.Dashboard.Dtos;
 using IncidentHub.Application.Dashboard.GetAppStatus;
 using IncidentHub.Application.Dashboard.GetDashboardSummary;
@@ -20,6 +21,6 @@ public sealed class DashboardController(ISender sender) : ControllerBase
 
     [HttpGet("summary")]
     [ProducesResponseType<DashboardSummaryDto>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<DashboardSummaryDto>> GetSummary([FromQuery] string? range, CancellationToken cancellationToken) =>
+    public async Task<ActionResult<DashboardSummaryDto>> GetSummary([FromQuery, OpenApiAllowedValues("24h", "7d", "30d", Default = "7d")] string? range, CancellationToken cancellationToken) =>
         Ok(await sender.Send(new GetDashboardSummaryQuery(range), cancellationToken));
 }

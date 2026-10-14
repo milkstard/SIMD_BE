@@ -2,6 +2,7 @@ using IncidentHub.Api.Auth;
 using IncidentHub.Api.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -39,9 +40,12 @@ public static class SwaggerSetup
             {
                 [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = SchemeName } }] = [scope],
             });
+            options.OrderActionsBy(description => $"{description.RelativePath}|{description.HttpMethod}");
             options.OperationFilter<AuthResponsesOperationFilter>();
             options.OperationFilter<RequestHeadersOperationFilter>();
             options.OperationFilter<MultipartUploadOperationFilter>();
+            options.ParameterFilter<AllowedValuesParameterFilter>();
+            options.DocumentFilter<SortedDocumentFilter>();
         });
 
         return services;
@@ -155,5 +159,55 @@ public sealed class MultipartUploadOperationFilter : IOperationFilter
                 },
             },
         };
+    }
+}
+
+/// <summary>Marks a string parameter as accepting only these values in the OpenAPI document. The server still validates it itself.</summary>
+[AttributeUsage(AttributeTargets.Parameter)]
+public sealed class OpenApiAllowedValuesAttribute(params string[] values) : Attribute
+{
+    public IReadOnlyList<string> Values { get; } = values;
+
+    /// <summary>Documented default, or <c>null</c> for none.</summary>
+    public string? Default { get; init; }
+}
+
+/// <summary>Documents the values of a parameter marked with <see cref="OpenApiAllowedValuesAttribute"/> as an enum.</summary>
+public sealed class AllowedValuesParameterFilter : IParameterFilter
+{
+    public void Apply(OpenApiParameter parameter, ParameterFilterContext context)
+    {
+        var attribute = context.ParameterInfo?.GetCustomAttributes(true).OfType<OpenApiAllowedValuesAttribute>().SingleOrDefault();
+        if (attribute is null)
+        {
+            return;
+        }
+
+        parameter.Schema.Enum = attribute.Values.Select(v => (IOpenApiAny)new OpenApiString(v)).ToList();
+        if (attribute.Default is not null)
+        {
+            parameter.Schema.Default = new OpenApiString(attribute.Default);
+        }
+    }
+}
+
+/// <summary>Sorts paths and component schemas ordinally so the generated document does not depend on reflection order.</summary>
+public sealed class SortedDocumentFilter : IDocumentFilter
+{
+    public void Apply(OpenApiDocument swaggerDoc, DocumentFilterContext context)
+    {
+        var paths = swaggerDoc.Paths.OrderBy(p => p.Key, StringComparer.Ordinal).ToList();
+        swaggerDoc.Paths = new OpenApiPaths();
+        foreach (var (key, item) in paths)
+        {
+            swaggerDoc.Paths.Add(key, item);
+        }
+
+        var schemas = swaggerDoc.Components.Schemas.OrderBy(p => p.Key, StringComparer.Ordinal).ToList();
+        swaggerDoc.Components.Schemas.Clear();
+        foreach (var (key, schema) in schemas)
+        {
+            swaggerDoc.Components.Schemas.Add(key, schema);
+        }
     }
 }

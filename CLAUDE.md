@@ -50,6 +50,7 @@ dotnet format                                         # run before committing
 After changing any endpoint or DTO, regenerate the OpenAPI spec (`swagger.json` in `/contracts`)
 — the frontend generates its TypeScript types from it and CI fails on an unexpected diff.
 Run `scripts/generate-openapi.ps1` (uses fixed placeholder config so the output is stable).
+Pipeline task (no workflow file in this repo): run that script, then `git diff --exit-code contracts/swagger.json`. Paths and schemas are sorted by `SortedDocumentFilter`, and `OpenApiDocumentTests.Generate_MatchesCommittedSwagger` fails locally when the committed file is stale.
 
 Local config (user-secrets, never committed): `AzureAd:TenantId`, `AzureAd:ClientId`, `Authorization:GroupRoleMap:<group-id>` = role,
 `ConnectionStrings:Sql`, `ConnectionStrings:Redis`, `Storage:Blob:ConnectionString` (Azurite: `UseDevelopmentStorage=true`) or `Storage:Blob:AccountUri` (Azure, managed identity). Worker email (`Notifications:Email:*`, defaults in `appsettings.json` with `Enabled: false` = log only): set `Enabled=true` to send over SMTP (Mailpit: `Host=localhost`, `Port=1025`); `Username`/`Password` only via user-secrets or Key Vault. Optional: `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://localhost:4317`)

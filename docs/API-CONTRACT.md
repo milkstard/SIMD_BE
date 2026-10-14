@@ -340,6 +340,8 @@ interface AppNotification {
 | PATCH | `/me/notifications/{id}` | `{ "isRead": true }` | `204` |
 | POST | `/me/notifications/read-all` | — | `204` |
 
+`GET /me` (any signed-in role, takes no id, so it only ever describes the caller): `id` is the internal `User.Id`, not the Entra object id. `roles` come from the token's group mapping (not from `TeamMembers.Role`), in the order Reporter, Responder, TeamLead, Admin. `teamIds` are the teams the caller belongs to, ascending, `[]` when none. The call writes nothing (it does not touch `LastSeenAt`).
+
 ### Admin (Admin role)
 
 ```ts
