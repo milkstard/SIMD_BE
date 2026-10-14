@@ -1,6 +1,8 @@
+using IncidentHub.Application.Abstractions;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Domain.Common;
 using IncidentHub.Domain.Incidents.Events;
+using Microsoft.Extensions.Logging;
 
 namespace IncidentHub.Application.Realtime;
 
@@ -9,7 +11,8 @@ namespace IncidentHub.Application.Realtime;
 /// through <see cref="IIncidentBroadcastReader"/> and sends nothing. Updates of one incident collapse into one message because the
 /// summary is read after the commit anyway.
 /// </summary>
-public sealed class IncidentBroadcaster(IIncidentBroadcastReader reader)
+public sealed class IncidentBroadcaster(
+    IIncidentBroadcastReader reader, IAppStatusReader appStatuses, ILogger<IncidentBroadcaster> logger)
 {
     public async Task<BroadcastPlan> PlanAsync(IReadOnlyList<IDomainEvent> events, CancellationToken cancellationToken)
     {
@@ -63,6 +66,30 @@ public sealed class IncidentBroadcaster(IIncidentBroadcastReader reader)
             }
         }
 
+        // The status block is best effort: a failure here must not drop the broadcasts of the save.
+        try
+        {
+            foreach (var applicationId in await TouchedApplicationsAsync(events, reported, LoadAsync))
+            {
+                if (await appStatuses.RefreshAsync(applicationId, cancellationToken) is not { } refresh)
+                {
+                    continue;
+                }
+
+                // Pushed on a real change, and on the first derivation: with nothing cached (TTL expired) a recovery
+                // must not be missed, so an unchanged status can then be pushed once more.
+                if (refresh.Previous != refresh.Current.Status)
+                {
+                    messages.Add(new AppStatusChangedMessage(refresh.Current, [new(BroadcastAudience.Dashboard, refresh.OwningTeamId)]));
+                    AddTeam(teams, refresh.OwningTeamId);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "App status refresh failed; the other broadcasts of this save are still sent");
+        }
+
         foreach (var added in comments)
         {
             if (await LoadAsync(added.IncidentId) is not { } incident
@@ -82,6 +109,56 @@ public sealed class IncidentBroadcaster(IIncidentBroadcastReader reader)
 
         return messages.Count == 0 ? BroadcastPlan.Empty : new BroadcastPlan(messages, teams);
     }
+
+    /// <summary>Applications whose derived status an event may have changed: reports, transitions, and edits of severity, environment or application (old one included).</summary>
+    private static async Task<IReadOnlyList<Guid>> TouchedApplicationsAsync(
+        IReadOnlyList<IDomainEvent> events,
+        List<Guid> reported,
+        Func<Guid, Task<BroadcastIncident?>> load)
+    {
+        var applications = new List<Guid>();
+
+        void Add(Guid id)
+        {
+            if (!applications.Contains(id))
+            {
+                applications.Add(id);
+            }
+        }
+
+        foreach (var id in reported)
+        {
+            if (await load(id) is { } incident)
+            {
+                Add(incident.Summary.Application.Id);
+            }
+        }
+
+        foreach (var transitioned in events.OfType<IncidentTransitioned>().Select(t => t.IncidentId).Distinct())
+        {
+            if (!reported.Contains(transitioned) && await load(transitioned) is { } incident)
+            {
+                Add(incident.Summary.Application.Id);
+            }
+        }
+
+        foreach (var edit in events.OfType<IncidentUpdated>().Where(u => u.ChangedFields.Any(StatusFields.Contains)))
+        {
+            if (!reported.Contains(edit.IncidentId) && await load(edit.IncidentId) is { } incident)
+            {
+                Add(incident.Summary.Application.Id);
+            }
+
+            if (edit.PreviousApplicationId is { } previous)
+            {
+                Add(previous);
+            }
+        }
+
+        return applications;
+    }
+
+    private static readonly HashSet<string> StatusFields = ["Severity", "Environment", "ApplicationId"];
 
     private static Guid? UpdatedIncidentId(IDomainEvent e) => e switch
     {

@@ -7,6 +7,48 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/11_01_app-status-calculator.md` (BE-11, part 1 of 3) |
+| State | Done <!-- Planned · In progress · Blocked · Done --> |
+| Started | 2026-10-14 |
+| Last updated | 2026-10-14 |
+| Branch / commit | main / `7c354cb` (11_01 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (11_01 section 9), `API-CONTRACT.md` (endpoint notes, `AppStatusChanged` recipient), deferred/completed items, `contracts/swagger.json` regenerated (additive, new path only)
+- [x] Domain: `AppStatusCalculator`, `OpenIncidentFact`, `AppStatusResult`; `IncidentUpdated.PreviousApplicationId` set by `Incident.Update` on an application move
+- [x] Application: `OpenIncidentFacts`, `AppStatusComputation`, `IAppStatusReader` (`GetAsync`/`RefreshAsync`), `GetAppStatusQuery` + handler, `AppStatusChangedMessage`, `IncidentBroadcaster` refreshes touched applications and plans the message only on a change
+- [x] Infrastructure: `RedisAppStatusReader` (key `appstatus:{id:N}`, 60 s TTL, Redis errors logged and bypassed, spans `appstatus.get`/`appstatus.refresh`)
+- [x] Api: `DashboardController` (`GET /api/v1/dashboard/app-status`), `HubPostCommitDispatcher` sends `AppStatusChanged`
+- [x] Tests written: `AppStatusCalculatorTests` (8), two `Incident.Update` event cases, six new `IncidentBroadcasterTests`, `AppStatusDerivationTests` (3), integration `AppStatusTests` (8) and `AppStatusBroadcastTests` (3)
+- [x] Build, format, unit tests
+- [x] Integration tests run with Docker
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` run.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 466, Application 265, Worker 4, Api.UnitTests 155 passed, 0 failed.
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 546/546 passed (new `AppStatusTests` 8, `AppStatusBroadcastTests` 3).
+- Finding: with Redis down no authenticated request answers, because `UserDirectory.EnsureUserAsync` (sign-in sync, pre-existing) needs Redis. `Get_RedisUnavailable_StillAnswers` therefore tests `RedisAppStatusReader` directly with a dead multiplexer; the endpoint-level criterion depends on a separate fix to `UserDirectory`.
+- `contracts/swagger.json` regenerated: +76 lines, the new path only.
+
+### Decisions (2026-10-14)
+See spec 11_01 section 9: open questions 1-8 accepted as proposed; `PreviousApplicationId` on `IncidentUpdated`; `InvalidateAsync` became `RefreshAsync` (read previous, recompute, overwrite).
+
+### Blockers / open questions
+None.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1436/1436 passed (integration 546), 0 proposed tests required, 3 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 1 Medium / 5 Low |
+
+Verdict: **Approved**. Open non-blocking items: code review M1 a SQL failure inside `RefreshAsync` makes `IncidentBroadcaster.PlanAsync` throw and drops every broadcast of the save (catch and log around the status block, or run it last); L1 `Previous == null` after the 60 s TTL pushes `AppStatusChanged` although the status is unchanged (document, or skip when nothing was cached and the status is Operational); L2 span tags are `cache.hits`/`cache.misses`, spec says `cache.hit`; L3 the applications query runs twice on a cache miss; L4/SEC-1 a miss-path write or an out-of-order refresh can overwrite a fresher cache value for up to 60 s (`When.NotExists` on the miss path); L5 `TouchedApplicationsAsync` could share one loop helper; SEC-2 an owning-team change is not refreshed until the TTL; QA F1/F2 no endpoint test for Closed/Reopened, an environment edit or an application move; QA F3 the endpoint cannot survive a Redis outage because `UserDirectory.EnsureUserAsync` (sign-in sync) needs Redis, so the criterion is tested at reader level.
+
+## Previous implementation (10_03)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/10_03_email-triggers.md` (BE-10, part 3 of 3) |
 | State | Done <!-- Planned Â· In progress Â· Blocked Â· Done --> |
 | Started | 2026-10-14 |
@@ -225,6 +267,10 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-14 · 11_01 · Fixed · Review M1 (status refresh failure no longer drops the save's broadcasts), L1 (documented), L2 (span tags), L4/SEC-1 (`When.NotExists` on the miss path), QA F1/F2 (Closed, Reopened, application-move endpoint tests), F3 recorded in deferred items; unit tests green, 28 related integration tests green, format clean. Not done: L3, L5, SEC-2, environment-edit test (apps only offer Production).
+- 2026-10-14 · 11_01 · Reviewed · Approved ? QA 1436/1436 (3 Low), security 0 Critical/High/Medium (2 Low), code review 1 Medium / 5 Low.
+- 2026-10-14 · 11_01 · Done · Calculator, cached reader, `GET /dashboard/app-status`, `AppStatusChanged`; 546 integration + 890 unit tests green with Docker, format clean; review pending.
+- 2026-10-14 · 11_01 · In progress · Started; pulls in `AppStatusCalculator` and the `AppStatusChanged` broadcast from deferred items.
 - 2026-10-14 · 10_03 · Reviewed · Approved · QA 1406/1406 (5 Low), security 0 Critical/High/Medium (3 Low), code review 5 Low.
 - 2026-10-14 · 10_03 · Done · Email triggers, SEC-A, SEC-B; 535 integration + 871 unit tests green with Docker, format clean; review pending.
 - 2026-10-14 · 10_03 · Blocked · Email handlers (reported, assigned, resolved), keyed handler resolution (SEC-A), no-handler marker (SEC-B); build, format and 871 unit tests green; integration run waits for Docker.

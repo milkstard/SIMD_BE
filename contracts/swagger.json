@@ -698,6 +698,50 @@
         }
       }
     },
+    "/api/v1/dashboard/app-status": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppStatusItemDto"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppStatusItemDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AppStatusItemDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (ProblemDetails)"
+          },
+          "403": {
+            "description": "Authenticated but not permitted (ProblemDetails)"
+          }
+        }
+      }
+    },
     "/api/v1/incidents": {
       "post": {
         "tags": [
@@ -2894,6 +2938,38 @@
           "Development"
         ],
         "type": "string"
+      },
+      "AppStatus": {
+        "enum": [
+          "Operational",
+          "Degraded",
+          "Outage"
+        ],
+        "type": "string"
+      },
+      "AppStatusItemDto": {
+        "type": "object",
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/ApplicationRefDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AppStatus"
+          },
+          "openIncidents": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "worstOpenSeverity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
       },
       "ApplicationDto": {
         "type": "object",

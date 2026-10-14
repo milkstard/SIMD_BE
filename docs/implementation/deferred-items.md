@@ -10,7 +10,6 @@ Rules:
 
 | Item | Source spec | Deferred to | Notes |
 |---|---|---|---|
-| `AppStatusCalculator` | 04_01 | BE-11 | |
 | `SlaPolicies` table | 04_02 | BE-12 | |
 | `Notifications` table | 04_02 | BE-14 | |
 | `IncidentDailyStats` table | 04_02 | BE-15 | |
@@ -19,8 +18,10 @@ Rules:
 | Rate limiting on `POST /incidents`, `GET /incidents/similar`, `POST /attachments` and `POST /incidents/{id}/comments` | 05_02, 06_01, 08_01, 08_02 | Unassigned (cross-cutting security) | No BE item owns it yet; `similar` is called while the user types |
 | `@mention` parsing in comment bodies and `Mentioned` notifications | 08_01 | BE-14 | |
 | `DashboardChanged` payload: production `IDashboardSummaryReader` (BE-09 builds the 1/s throttle and the port only) | 09_02 | BE-11 | |
-| `AppStatusChanged` broadcast (needs `AppStatusCalculator`) | 09_02 | BE-11 | Method is declared on `IIncidentClient` in 09_01 |
 | `NotificationReceived` broadcast to `user:{userId}` | 09_01, 09_02 | BE-14 | Group and method exist after 09_01 |
 | Broadcasts for changes made by the Worker/webhook (SLA breach, alert-created incidents) | 09_02 | BE-12, BE-17 | Needs a cross-process path (e.g. Redis pub/sub); BE-09 broadcasts only API-side commits |
 | Honour `User.NotificationPrefs` (a `Teams` preference suppresses the email) in the email handlers | 10_03 | BE-13 | 10_03 emails regardless of the stored preference |
 | Email for `IncidentUpdated`, other transitions, `CommentAdded`, `AttachmentAdded` | 10_03 | BE-13, BE-14 | 10_03 marks these outbox types processed without sending |
+| Dashboard `trend`, MTTA and MTTR read from `IncidentDailyStats` instead of raw `Incidents` | 11_02 | BE-15 | 11_02 computes them from `Incidents` because the rollup table does not exist yet |
+| Invalidate the app-status and summary caches (and broadcast) when the Worker changes an incident (SLA breach sets `IsSlaBreached`) | 11_01, 11_02 | BE-12 | Needs a cross-process path; until then the cache TTL bounds the staleness |
+| Make the sign-in sync (`UserDirectory.EnsureUserAsync`) survive a Redis outage so authenticated endpoints answer from SQL | 11_01 | Unassigned (cross-cutting resilience) | Today every authenticated request fails with 500 when Redis is down; `RedisAppStatusReader` itself falls back to SQL |

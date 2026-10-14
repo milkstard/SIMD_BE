@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using IncidentHub.Api.IntegrationTests.Infrastructure;
+using IncidentHub.Application.Dashboard.Dtos;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Domain.Users;
 using Microsoft.AspNetCore.Http.Connections;
@@ -23,6 +24,7 @@ internal sealed class BroadcastClient : IAsyncDisposable
         connection.On<IncidentSummaryDto>("IncidentCreated", e => Add(Created, e));
         connection.On<IncidentSummaryDto>("IncidentUpdated", e => Add(Updated, e));
         connection.On<CommentAddedEvent>("CommentAdded", e => Add(Comments, e));
+        connection.On<AppStatusItemDto>("AppStatusChanged", e => Add(AppStatuses, e));
     }
 
     public List<IncidentSummaryDto> Created { get; } = [];
@@ -30,6 +32,8 @@ internal sealed class BroadcastClient : IAsyncDisposable
     public List<IncidentSummaryDto> Updated { get; } = [];
 
     public List<CommentAddedEvent> Comments { get; } = [];
+
+    public List<AppStatusItemDto> AppStatuses { get; } = [];
 
     /// <summary>Connects as the user and joins the dashboards of their teams; the call returns once the connection groups are live.</summary>
     public static async Task<BroadcastClient> ConnectAsync(

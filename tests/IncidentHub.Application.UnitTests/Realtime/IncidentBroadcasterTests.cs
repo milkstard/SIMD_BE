@@ -1,11 +1,14 @@
 using FluentAssertions;
+using IncidentHub.Application.Abstractions;
 using IncidentHub.Application.Common;
+using IncidentHub.Application.Dashboard.Dtos;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Application.Realtime;
 using IncidentHub.Domain.Apps;
 using IncidentHub.Domain.Common;
 using IncidentHub.Domain.Incidents;
 using IncidentHub.Domain.Incidents.Events;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace IncidentHub.Application.UnitTests.Realtime;
@@ -15,10 +18,12 @@ public sealed class IncidentBroadcasterTests
     private static readonly DateTimeOffset Now = new(2026, 10, 13, 9, 0, 0, TimeSpan.Zero);
 
     private readonly IIncidentBroadcastReader _reader = Substitute.For<IIncidentBroadcastReader>();
+    private readonly IAppStatusReader _statuses = Substitute.For<IAppStatusReader>();
+    private readonly Guid _appId = Guid.NewGuid();
     private readonly Guid _incidentId = Guid.NewGuid();
     private readonly Guid _teamId = Guid.NewGuid();
 
-    private IncidentBroadcaster Sut => new(_reader);
+    private IncidentBroadcaster Sut => new(_reader, _statuses, NullLogger<IncidentBroadcaster>.Instance);
 
     [Fact]
     public async Task Map_IncidentReported_TargetsDashboardAndTeam()
@@ -128,6 +133,105 @@ public sealed class IncidentBroadcasterTests
         await _reader.DidNotReceiveWithAnyArgs().GetIncidentAsync(default, default);
     }
 
+    [Fact]
+    public async Task IncidentBroadcaster_StatusChanged_PlansAppStatusMessage()
+    {
+        GivenIncident();
+        GivenRefresh(AppStatus.Operational, AppStatus.Outage);
+
+        var plan = await Sut.PlanAsync([Reported()], default);
+
+        var message = plan.Messages.OfType<AppStatusChangedMessage>().Should().ContainSingle().Subject;
+        message.Item.Status.Should().Be(AppStatus.Outage);
+        message.Targets.Should().Equal(new BroadcastTarget(BroadcastAudience.Dashboard, _teamId));
+        plan.DashboardTeamIds.Should().Equal(_teamId);
+    }
+
+    [Fact]
+    public async Task IncidentBroadcaster_NothingCachedBefore_PlansAppStatusMessage()
+    {
+        GivenIncident();
+        GivenRefresh(null, AppStatus.Operational);
+
+        var plan = await Sut.PlanAsync([Transitioned()], default);
+
+        plan.Messages.OfType<AppStatusChangedMessage>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task IncidentBroadcaster_StatusRefreshThrows_StillPlansIncidentMessage()
+    {
+        GivenIncident();
+        _statuses.RefreshAsync(_appId, Arg.Any<CancellationToken>()).Returns<AppStatusRefresh?>(_ => throw new InvalidOperationException("sql down"));
+
+        var plan = await Sut.PlanAsync([Reported()], default);
+
+        plan.Messages.Should().ContainSingle().Which.Should().BeOfType<IncidentCreatedMessage>();
+    }
+
+    [Fact]
+    public async Task IncidentBroadcaster_StatusRefreshCancelled_Propagates()
+    {
+        GivenIncident();
+        _statuses.RefreshAsync(_appId, Arg.Any<CancellationToken>()).Returns<AppStatusRefresh?>(_ => throw new OperationCanceledException());
+
+        var act = () => Sut.PlanAsync([Reported()], default);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task IncidentBroadcaster_StatusUnchanged_PlansNoAppStatusMessage()
+    {
+        GivenIncident();
+        GivenRefresh(AppStatus.Degraded, AppStatus.Degraded);
+
+        var plan = await Sut.PlanAsync([Transitioned()], default);
+
+        plan.Messages.Should().NotContain(m => m is AppStatusChangedMessage);
+        await _statuses.Received(1).RefreshAsync(_appId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task IncidentBroadcaster_AssignmentOrTitleEdit_DoesNotRefreshStatus()
+    {
+        GivenIncident();
+
+        await Sut.PlanAsync(
+            [new IncidentAssigned(_incidentId, null, null, null, null, null, Now), new IncidentUpdated(_incidentId, ["Title"], null, Now)],
+            default);
+
+        await _statuses.DidNotReceiveWithAnyArgs().RefreshAsync(default, default);
+    }
+
+    [Fact]
+    public async Task IncidentBroadcaster_ApplicationMoved_RefreshesBothApplications()
+    {
+        GivenIncident();
+        var oldApp = Guid.NewGuid();
+
+        await Sut.PlanAsync([new IncidentUpdated(_incidentId, ["ApplicationId"], null, Now, oldApp)], default);
+
+        await _statuses.Received(1).RefreshAsync(_appId, Arg.Any<CancellationToken>());
+        await _statuses.Received(1).RefreshAsync(oldApp, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task IncidentBroadcaster_ReportedAndTransitioned_RefreshesOnce()
+    {
+        GivenIncident();
+
+        await Sut.PlanAsync([Reported(), Transitioned()], default);
+
+        await _statuses.Received(1).RefreshAsync(_appId, Arg.Any<CancellationToken>());
+    }
+
+    private void GivenRefresh(AppStatus? previous, AppStatus current) =>
+        _statuses.RefreshAsync(_appId, Arg.Any<CancellationToken>()).Returns(new AppStatusRefresh(
+            _teamId,
+            previous,
+            new AppStatusItemDto(new ApplicationRefDto(_appId, "App", "APP"), current, 1, Severity.High, Now)));
+
     private IncidentReported Reported() =>
         new(_incidentId, Guid.NewGuid(), AppEnvironment.Production, Severity.High, IncidentSource.Manual, Guid.NewGuid(), Now);
 
@@ -137,7 +241,7 @@ public sealed class IncidentBroadcasterTests
     private void GivenIncident()
     {
         var summary = new IncidentSummaryDto(
-            _incidentId, "INC-1001", "Title", new ApplicationRefDto(Guid.NewGuid(), "App", "APP"), AppEnvironment.Production,
+            _incidentId, "INC-1001", "Title", new ApplicationRefDto(_appId, "App", "APP"), AppEnvironment.Production,
             Severity.High, null, IncidentStatus.New, null, null, new UserRefDto(Guid.NewGuid(), "R", "r@test.local"),
             Now, Now, null, null, false, 0, "AAAA");
         _reader.GetIncidentAsync(_incidentId, Arg.Any<CancellationToken>()).Returns(new BroadcastIncident(summary, _teamId));

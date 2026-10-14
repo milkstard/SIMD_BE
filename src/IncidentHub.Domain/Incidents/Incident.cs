@@ -329,6 +329,7 @@ public sealed class Incident : AggregateRoot
 
         var actorId = ActorIdOf(actor);
         var changed = new List<string>();
+        var previousApplicationId = ApplicationId;
 
         void Apply<T>(Optional<T> change, T current, Action<T> assign, string field)
         {
@@ -360,7 +361,12 @@ public sealed class Incident : AggregateRoot
         }
 
         UpdatedAt = at;
-        Raise(new IncidentUpdated(Id, changed, actorId, at));
+        Raise(new IncidentUpdated(
+            Id,
+            changed,
+            actorId,
+            at,
+            changed.Contains(nameof(ApplicationId)) ? previousApplicationId : null));
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using IncidentHub.Api.Hubs;
+using IncidentHub.Application.Abstractions;
 using IncidentHub.Application.Common;
 using IncidentHub.Application.Incidents.Dtos;
 using IncidentHub.Application.Realtime;
@@ -40,6 +41,8 @@ public sealed class HubPostCommitDispatcherTests
 
         var services = new ServiceCollection();
         services.AddScoped(_ => reader);
+        services.AddScoped(_ => Substitute.For<IAppStatusReader>());
+        services.AddLogging();
         services.AddScoped<IncidentBroadcaster>();
 
         var hub = Substitute.For<IHubContext<IncidentsHub, IIncidentClient>>();

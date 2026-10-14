@@ -310,6 +310,8 @@ interface AppStatusItem {
 |---|---|---|
 | GET | `/dashboard/summary?range=7d` | `200` `DashboardSummary` |
 | GET | `/dashboard/app-status` | `200` `AppStatusItem[]` |
+
+`/dashboard/app-status` (any signed-in role): one item per **active** application owned by a team the caller belongs to (Admin included), ordered by `name`. The status is **derived, never set**: an open Critical incident in Production → `Outage`; any other open Critical or High → `Degraded`; otherwise `Operational`. Open means every status except `Resolved` and `Closed` (`Reopened` counts). `since` is the earliest creation time of the incidents that cause the current status (`null` when `Operational`). The value is cached for at most 60 s and refreshed on every incident change made through the API; a change made by the Worker (SLA breach) can show up to 60 s late.
 | GET | `/reports/incidents.csv?from=&to=&applicationId=` | `200` `text/csv` |
 
 ### Notifications and current user
@@ -455,7 +457,7 @@ Every connection is automatically in `user:{userId}` and in `team:{teamId}` for 
 | `IncidentCreated` | `IncidentSummary` | `dashboard:{teamId}`, `team:{teamId}` of the owning team |
 | `IncidentUpdated` | `IncidentSummary` | `dashboard:{teamId}`, `incident:{id}`, `team:{teamId}` |
 | `CommentAdded` | `{ incidentId: string; comment: Comment }` | `incident:{id}` (internal comments: `responders:{teamId}` only) |
-| `AppStatusChanged` | `AppStatusItem` | `dashboard:{teamId}` |
+| `AppStatusChanged` | `AppStatusItem` | `dashboard:{teamId}` of the owning team only (not `team:{teamId}`); sent only when the derived status changed |
 | `DashboardChanged` | `DashboardSummary` | `dashboard:{teamId}` (max 1 per second) |
 | `NotificationReceived` | `AppNotification` | `user:{userId}` |
 

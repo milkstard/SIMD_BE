@@ -415,6 +415,30 @@ public sealed class IncidentTests
     }
 
     [Fact]
+    public void Update_ChangedApplication_EventCarriesPreviousApplication()
+    {
+        var incident = Report();
+        incident.ClearDomainEvents();
+
+        incident.Update(new IncidentChanges { ApplicationId = Guid.NewGuid() }, Responder(), Later);
+
+        incident.DomainEvents.OfType<IncidentUpdated>().Should().ContainSingle()
+            .Which.PreviousApplicationId.Should().Be(IncidentTestData.ApplicationId);
+    }
+
+    [Fact]
+    public void Update_ApplicationUntouched_EventHasNoPreviousApplication()
+    {
+        var incident = Report();
+        incident.ClearDomainEvents();
+
+        incident.Update(new IncidentChanges { Title = "Payment page returns 500" }, Responder(), Later);
+
+        incident.DomainEvents.OfType<IncidentUpdated>().Should().ContainSingle()
+            .Which.PreviousApplicationId.Should().BeNull();
+    }
+
+    [Fact]
     public void Update_NothingChanged_NoHistoryNoEvent()
     {
         var incident = Report();

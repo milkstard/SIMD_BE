@@ -57,6 +57,7 @@ public sealed class HubPostCommitDispatcher(
             IncidentCreatedMessage created => clients.IncidentCreated(created.Incident),
             IncidentUpdatedMessage updated => clients.IncidentUpdated(updated.Incident),
             CommentAddedMessage comment => clients.CommentAdded(comment.Event),
+            AppStatusChangedMessage status => clients.AppStatusChanged(status.Item),
             _ => Task.CompletedTask,
         };
     }

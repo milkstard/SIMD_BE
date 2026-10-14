@@ -1,3 +1,4 @@
+using IncidentHub.Application.Dashboard.Dtos;
 using IncidentHub.Application.Incidents.Dtos;
 
 namespace IncidentHub.Application.Realtime;
@@ -20,6 +21,8 @@ public sealed record IncidentCreatedMessage(IncidentSummaryDto Incident, IReadOn
 public sealed record IncidentUpdatedMessage(IncidentSummaryDto Incident, IReadOnlyList<BroadcastTarget> Targets) : BroadcastMessage(Targets);
 
 public sealed record CommentAddedMessage(CommentAddedEvent Event, IReadOnlyList<BroadcastTarget> Targets) : BroadcastMessage(Targets);
+
+public sealed record AppStatusChangedMessage(AppStatusItemDto Item, IReadOnlyList<BroadcastTarget> Targets) : BroadcastMessage(Targets);
 
 /// <param name="DashboardTeamIds">Teams whose dashboard changed; each one gets a (throttled) <c>DashboardChanged</c>.</param>
 public sealed record BroadcastPlan(IReadOnlyList<BroadcastMessage> Messages, IReadOnlyList<Guid> DashboardTeamIds)
