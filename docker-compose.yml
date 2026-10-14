@@ -43,6 +43,19 @@ services:
       timeout: 3s
       retries: 10
 
+  # Local SMTP catcher for the Worker's email sender: set Notifications:Email:Enabled=true (Host localhost, Port 1025) and read the
+  # mail in the UI at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.21.8
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # Optional local trace/log viewer: `docker compose --profile observability up -d`, then run the API/Worker with
   # OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317 and open http://localhost:18888.
   aspire-dashboard:

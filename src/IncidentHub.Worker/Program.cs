@@ -1,6 +1,7 @@
 using IncidentHub.Application;
 using IncidentHub.Application.Abstractions;
 using IncidentHub.Infrastructure;
+using IncidentHub.Infrastructure.Notifications;
 using IncidentHub.Infrastructure.Telemetry;
 using IncidentHub.Worker.Identity;
 using IncidentHub.Worker.Jobs;
@@ -12,6 +13,7 @@ builder.AddIncidentHubObservability(WorkerTelemetry.Source);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddNotificationSenders(builder.Configuration);
 builder.Services.AddSingleton<ICurrentUser, SystemCurrentUser>();
 builder.Services.AddHostedService<AttachmentScanJob>();
 builder.Services.AddHostedService<OrphanAttachmentJob>();

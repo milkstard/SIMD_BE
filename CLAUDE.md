@@ -34,7 +34,7 @@ Reference only (NOT imported — read on demand when you need the original ratio
 
 ## Commands
 ```bash
-docker compose up -d                                  # SQL Server (+Full-Text, built from docker/mssql-fts on first run), Redis, Azurite (all with healthchecks)
+docker compose up -d                                  # SQL Server (+Full-Text, built from docker/mssql-fts on first run), Redis, Azurite, Mailpit (SMTP :1025, mail UI :8025), all with healthchecks
 docker compose build mssql                            # rebuild the SQL Server + Full-Text image (integration tests also build/reuse it)
 docker compose --profile observability up -d          # + Aspire dashboard (traces/logs UI on :18888, OTLP on :4317)
 dotnet build
@@ -52,7 +52,7 @@ After changing any endpoint or DTO, regenerate the OpenAPI spec (`swagger.json` 
 Run `scripts/generate-openapi.ps1` (uses fixed placeholder config so the output is stable).
 
 Local config (user-secrets, never committed): `AzureAd:TenantId`, `AzureAd:ClientId`, `Authorization:GroupRoleMap:<group-id>` = role,
-`ConnectionStrings:Sql`, `ConnectionStrings:Redis`, `Storage:Blob:ConnectionString` (Azurite: `UseDevelopmentStorage=true`) or `Storage:Blob:AccountUri` (Azure, managed identity). Optional: `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://localhost:4317`)
+`ConnectionStrings:Sql`, `ConnectionStrings:Redis`, `Storage:Blob:ConnectionString` (Azurite: `UseDevelopmentStorage=true`) or `Storage:Blob:AccountUri` (Azure, managed identity). Worker email (`Notifications:Email:*`, defaults in `appsettings.json` with `Enabled: false` = log only): set `Enabled=true` to send over SMTP (Mailpit: `Host=localhost`, `Port=1025`); `Username`/`Password` only via user-secrets or Key Vault. Optional: `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://localhost:4317`)
 enables OTLP export of traces, metrics and Serilog logs; without it, logs go to the console only. The API refuses to start without the Entra settings. See `docs/specs/entra-id-authorization.md`.
 
 ## Solution layout (Clean Architecture — respect the dependency direction)

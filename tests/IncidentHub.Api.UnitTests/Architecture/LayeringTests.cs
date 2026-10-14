@@ -41,6 +41,18 @@ public sealed class LayeringTests
     }
 
     [Fact]
+    public void DomainAndApplication_Reference_NoSmtpOrResilienceLibraries()
+    {
+        foreach (var assembly in new[] { Domain, Application })
+        {
+            ReferencedNames(assembly).Should().NotContain(name =>
+                name.StartsWith("MailKit", StringComparison.Ordinal)
+                || name.StartsWith("MimeKit", StringComparison.Ordinal)
+                || name.StartsWith("Polly", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
     public void Infrastructure_References_NoHostProjects()
     {
         ReferencedNames(Infrastructure).Should().NotContain(name =>
