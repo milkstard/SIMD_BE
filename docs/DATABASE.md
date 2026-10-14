@@ -240,9 +240,12 @@ Transactional outbox — written in the same `SaveChangesAsync` as the triggerin
 | `OccurredAt` | `datetimeoffset` | not null |
 | `ProcessedAt` | `datetimeoffset` | nullable — null = undispatched |
 | `Attempts` | `int` | not null, default `0` |
-| `Error` | `nvarchar(max)` | nullable — last failure message |
+| `Error` | `nvarchar(max)` | nullable — last failure message (the dispatcher keeps at most 2,000 characters) |
+| `NextAttemptAt` | `datetimeoffset` | nullable — earliest time the dispatcher may retry after a failure; null = now |
 
-**Indexes:** `IX_OutboxMessages_Unprocessed` on `ProcessedAt` `INCLUDE (OccurredAt)` `WHERE ProcessedAt IS NULL` — dispatcher poll query uses `UPDLOCK, READPAST` against this and orders by `OccurredAt`.
+`Attempts` at the configured maximum (`Outbox:Dispatcher:MaxAttempts`, default 8) means the message is **parked**: it is no longer claimed and `ProcessedAt` stays null, so an operator can find it with its last `Error`.
+
+**Indexes:** `IX_OutboxMessages_Unprocessed` on `ProcessedAt` `INCLUDE (OccurredAt, NextAttemptAt, Attempts)` `WHERE ProcessedAt IS NULL` — the dispatcher's claim query uses `UPDLOCK, READPAST` against this and orders by `OccurredAt`. The key is `ProcessedAt`, so the ordered claim reads and locks every eligible row, not only the batch: dispatcher replicas never double-process a message but take turns instead of splitting the backlog. Only the `WHERE` is evaluated from the index (the claim reads whole rows).
 
 ---
 

@@ -21,6 +21,7 @@ namespace IncidentHub.Api.IntegrationTests.Outbox;
 public sealed class OutboxPersistenceTests(ApiFactory factory)
 {
     private const string PreviousMigration = "20261011064809_AddIncidents";
+    private const string PreviousToNextAttemptAt = "20261013112822_AttachmentLinkConcurrency";
 
     private static readonly DateTimeOffset T0 = new(2026, 10, 12, 9, 0, 0, TimeSpan.Zero);
 
@@ -223,6 +224,25 @@ public sealed class OutboxPersistenceTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Migrate_AddOutboxNextAttemptAt_UpAndDown()
+    {
+        const string ColumnCount = "SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('dbo.OutboxMessages') AND name = 'NextAttemptAt'";
+        await using var db = NewIsolatedContext();
+        var migrator = db.GetService<IMigrator>();
+
+        await migrator.MigrateAsync(PreviousToNextAttemptAt);
+        (await ScalarAsync(db, ColumnCount)).Should().Be(0);
+
+        await db.Database.MigrateAsync();
+        (await ScalarAsync(db, ColumnCount)).Should().Be(1);
+
+        await migrator.MigrateAsync(PreviousToNextAttemptAt);
+        (await ScalarAsync(db, ColumnCount)).Should().Be(0);
+        (await ScalarAsync(db, "SELECT COUNT(*) FROM sys.indexes WHERE name = 'IX_OutboxMessages_Unprocessed'")).Should().Be(1);
+        await db.Database.EnsureDeletedAsync();
+    }
+
+    [Fact]
     public async Task Migrate_EmptyDatabase_IncludesOutboxMessages()
     {
         await using var db = NewIsolatedContext();
@@ -256,6 +276,7 @@ public sealed class OutboxPersistenceTests(ApiFactory factory)
         columns["ProcessedAt"].Should().Be("datetimeoffset NULL");
         columns["Attempts"].Should().Be("int NOT NULL");
         columns["Error"].Should().Be("nvarchar(max) NULL");
+        columns["NextAttemptAt"].Should().Be("datetimeoffset NULL");
 
         (await ScalarAsync(db, """
             SELECT COUNT(*) FROM sys.default_constraints dc
@@ -278,7 +299,7 @@ public sealed class OutboxPersistenceTests(ApiFactory factory)
             WHERE i.name = 'IX_OutboxMessages_Unprocessed'
             """).SingleAsync();
 
-        index.Should().StartWith("IX_OutboxMessages_Unprocessed|False|ProcessedAt|OccurredAt|");
+        index.Should().StartWith("IX_OutboxMessages_Unprocessed|False|ProcessedAt|Attempts,NextAttemptAt,OccurredAt|");
         index.Should().Contain("[ProcessedAt] IS NULL");
     }
 

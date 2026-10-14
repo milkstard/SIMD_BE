@@ -64,7 +64,7 @@ src/
   IncidentHub.Api/             # Controllers, IncidentHub (SignalR), auth policies, ProblemDetails, DI wiring
   IncidentHub.Worker/          # OutboxDispatcher, SlaMonitor, DailyStatsJob
 tests/
-  Domain.UnitTests, Application.UnitTests, Api.UnitTests, Api.IntegrationTests (Testcontainers)
+  Domain.UnitTests, Application.UnitTests, Api.UnitTests, Worker.UnitTests, Api.IntegrationTests (Testcontainers)
 ```
 Domain → nothing. Application → Domain. Infrastructure → Application. Api/Worker → all.
 `Directory.Build.targets` fails the build (`IH0001`/`IH0002`) on a reference that breaks this; `LayeringTests` backs it up.

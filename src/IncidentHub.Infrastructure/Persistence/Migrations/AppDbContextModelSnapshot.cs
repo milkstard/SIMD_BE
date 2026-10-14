@@ -450,6 +450,9 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                     b.Property<string>("Error")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("datetimeoffset");
 
@@ -471,7 +474,7 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_OutboxMessages_Unprocessed")
                         .HasFilter("[ProcessedAt] IS NULL");
 
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ProcessedAt"), new[] { "OccurredAt" });
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ProcessedAt"), new[] { "OccurredAt", "NextAttemptAt", "Attempts" });
 
                     b.ToTable("OutboxMessages", (string)null);
                 });

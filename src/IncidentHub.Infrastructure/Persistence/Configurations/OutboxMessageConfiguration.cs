@@ -19,9 +19,9 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(m => m.Attempts).HasDefaultValue(0);
         builder.Property(m => m.Error).HasColumnType("nvarchar(max)");
 
-        // The dispatcher polls undispatched rows in order (UPDLOCK, READPAST, BE-10).
+        // The dispatcher polls undispatched rows in order (UPDLOCK, READPAST); the include list lets the claim's WHERE be evaluated from the index leaf (the claim reads whole rows, so it is not covering).
         builder.HasIndex(m => m.ProcessedAt)
-            .IncludeProperties(m => m.OccurredAt)
+            .IncludeProperties(m => new { m.OccurredAt, m.NextAttemptAt, m.Attempts })
             .HasFilter("[ProcessedAt] IS NULL")
             .HasDatabaseName(UnprocessedIndexName);
     }

@@ -4,6 +4,7 @@ using Azure.Storage.Blobs;
 using IncidentHub.Application.Abstractions;
 using IncidentHub.Infrastructure.Attachments;
 using IncidentHub.Infrastructure.Caching;
+using IncidentHub.Infrastructure.Outbox;
 using IncidentHub.Infrastructure.Persistence;
 using IncidentHub.Infrastructure.Persistence.Search;
 using IncidentHub.Infrastructure.Security;
@@ -47,6 +48,7 @@ public static class DependencyInjection
         services.AddSingleton<IHtmlSanitizer, HtmlSanitizerAdapter>();
         services.AddSlaPolicies(configuration);
         services.AddAttachmentStorage(configuration);
+        services.AddOutbox(configuration);
 
         return services;
     }
