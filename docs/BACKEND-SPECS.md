@@ -297,6 +297,32 @@ Implement in ID order within a phase; phases are sequential.
 
 ---
 
+### BE-18 · Azure deployment & CI/CD
+**Context:** Everything runs locally against Docker (SQL Server, Redis, Azurite, Mailpit). Ship the API and Worker to Azure
+with a gated pipeline, managed services and no secrets in config. Closes the CI/CD and Key Vault items under Cross-cutting.
+**Requirements:**
+- Dockerfiles for `IncidentHub.Api` and `IncidentHub.Worker`; hosted on Azure App Service or Container Apps (decide in the spec)
+- Infrastructure as code (Bicep or Terraform, decide in the spec) for Azure SQL (with Full-Text Search), Azure Cache for Redis,
+  Storage account, Key Vault, hosting, and a staging and a production environment
+- Managed identity for the API and Worker: Blob via `Storage:Blob:AccountUri` (Storage Blob Data Contributor, covers the
+  startup container creation and user-delegation SAS), Key Vault secrets, Azure SQL; no connection-string secrets in config
+- Key Vault holds the remaining secrets (SMTP `Username`/`Password`, `AzureAd:*`, `Authorization:GroupRoleMap:*`)
+- GitHub Actions: build → unit tests → integration tests (Testcontainers) → `scripts/generate-openapi.ps1` +
+  `git diff --exit-code contracts/swagger.json` → deploy staging → Playwright smoke → manual approval → production
+- EF Core migration bundle built in CI and applied by the pipeline before each deploy — never `Database.Migrate()` at startup
+- OTLP export pointed at Azure Monitor / Application Insights
+- CORS restricted to the SPA origin per environment
+
+**Acceptance Criteria:**
+- [ ] A push to `main` runs the full pipeline; a stale `swagger.json` or a failing test stops it before any deploy
+- [ ] Production deploys only after a manual approval on a green staging smoke test
+- [ ] The deployed API and Worker start with no secret in `appsettings.*` or pipeline variables (managed identity + Key Vault only)
+- [ ] An attachment uploaded on staging downloads through a 5-minute user-delegation SAS link
+- [ ] Migrations are applied by the bundle step; a failed migration stops the deploy and leaves the running version untouched
+**Dependencies:** BE-01, BE-02, BE-08, BE-10
+
+---
+
 ## PHASE 3 (future — not yet spec'd in detail)
 - [ ] Public status page API
 - [ ] Post-incident review templates
