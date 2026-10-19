@@ -28,15 +28,28 @@ internal sealed class EmailTestKit
 
     public EmailDelivery Delivery { get; }
 
-    public static IncidentEmailFacts Facts(Guid? reporterId = null, Guid? teamId = null, string title = "Checkout fails") => new(
+    public static IncidentEmailFacts Facts(
+        Guid? reporterId = null,
+        Guid? teamId = null,
+        string title = "Checkout fails",
+        IncidentStatus status = IncidentStatus.Resolved,
+        Guid? assigneeId = null,
+        DateTimeOffset? slaWarnedAt = null,
+        Guid? escalationUserId = null,
+        int? escalateAtPercent = 80) => new(
         "INC-1042",
         title,
         "Checkout",
         AppEnvironment.Production,
         Severity.High,
-        IncidentStatus.Resolved,
+        status,
         reporterId ?? Guid.NewGuid(),
-        teamId ?? Guid.NewGuid());
+        teamId ?? Guid.NewGuid(),
+        assigneeId,
+        ResolveDueAt: At.AddHours(4),
+        SlaWarnedAt: slaWarnedAt,
+        EscalationUserId: escalationUserId,
+        EscalateAtPercent: escalateAtPercent);
 
     public IReadOnlyList<Notification> Sent() =>
         Sender.ReceivedCalls()

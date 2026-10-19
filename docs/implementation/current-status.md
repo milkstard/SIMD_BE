@@ -7,6 +7,45 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/12_03_sla-emails.md` (BE-12, part 3 of 4) |
+| State | Done <!-- Planned - In progress - Blocked - Done --> |
+| Started | 2026-10-19 |
+| Last updated | 2026-10-19 |
+| Branch / commit | main / `1634a92` (12_03 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (12_03 section 9)
+- [x] Application: `IncidentEmailFacts` SLA fields, `IncidentEmailReader` (left join on `SlaPolicies`), `EmailContentBuilder.SlaWarning/SlaBreached` (+ CR/LF collapse for every mail), `SlaWarningEmailHandler`, `SlaBreachedEmailHandler`, current-assignee check in `IncidentAssignedEmailHandler`
+- [x] Infrastructure: keyed registration in `AddNotificationSenders`
+- [x] Tests written (unit, layering, Mailpit integration)
+- [x] Build, format, unit tests
+- [x] Full integration suite run with Docker
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` run.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 502, Application 327, Worker 7, Api.UnitTests 158 passed, 0 failed (new: `SlaWarningEmailHandlerTests`, `SlaBreachedEmailHandlerTests`, `EmailContentBuilderTests` SLA and line-break cases, one `IncidentAssignedEmailHandlerTests` case; the layering test now covers the five handlers).
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 621/621 passed (new in `EmailDispatchTests` with Mailpit: 7 - warning to assignee, unassigned, resolved before dispatch, breach to contact, breach to owning team, redelivery same `Message-Id`, title with line breaks).
+- `contracts/swagger.json` unchanged (no endpoint or DTO change); `OpenApiDocumentTests` in the green run.
+
+### Decisions (2026-10-19)
+See spec 12_03 section 9: OQ 1 skip a warning with no assignee; OQ 2 breach falls back to the owning team's email; OQ 3/4 as proposed; a warning is stale unless `SlaWarnedAt == event.OccurredAt`; the Assigned mail checks the current assignee (10_03 SEC-2); title line breaks collapsed for every mail (10_03 SEC-1).
+
+### Blockers / open questions
+None.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1615/1615 passed (integration 621), 0 proposed tests required, 5 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 4 Low |
+
+Verdict: **Approved**. Fixed after the review: SEC-1 (`Note` collapsed with `OneLine`, new test) and code review L3 (no defaults on the new facts parameters). Open non-blocking items: SEC-2 / QA the breach handler does not check that the incident is still open (the spec does not ask for it; document it, or add the check and `IsSlaBreached` to the facts); code review L1 the warning handler logs one `Warning` for three causes (resolved, closed, superseded), L2 spec section 3 lists `IsSlaBreached` but the reader omits it (YAGNI, edit the spec), L4 `DueAt` falls back to "unknown" (untested); QA Lows: spec header still says Draft and its acceptance boxes are unticked, spec section 6 names/locations differ from the integration tests (`Outbox/EmailDispatchTests.cs`, `SlaBreached_Redelivery_SameMessageId`), no warning-specific redelivery test, the Unicode line separators (U+0085, U+2028, U+2029) of the `LineBreaks` regex are untested (code review confirmed the class holds the real characters), one transient Docker start-up failure on the first combined run (cleared on rerun).
+
+## Previous implementation (12_02)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/12_02_sla-monitor.md` (BE-12, part 2 of 4) |
 | State | Done <!-- Planned - In progress - Blocked - Done --> |
 | Started | 2026-10-19 |
@@ -430,6 +469,10 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-19 - 12_03 - Fixed - Review SEC-1 (Resolved mail `Note` collapsed to one line) and code review L3 (no null defaults on the new `IncidentEmailFacts` parameters); build 0 warnings, format clean, 995 unit + 621 integration tests green with Docker.
+- 2026-10-19 - 12_03 - Reviewed - Approved - QA 1615/1615 (5 Low), security 0 Critical/High/Medium (2 Low), code review 0 Critical/High/Medium (4 Low).
+- 2026-10-19 - 12_03 - Done - SLA warning/breach emails (`SlaWarningEmailHandler`, `SlaBreachedEmailHandler`), 10_03 SEC-1/SEC-2 closed; 621 integration + 994 unit tests green with Docker, format clean; review pending.
+- 2026-10-19 - 12_03 - In progress - Started; SLA warning/breach emails on the outbox; no deferred item involved.
 - 2026-10-19 - 12_02 - Reviewed - Approved - QA 1587/1587 (5 Low), security 0 Critical/High/Medium (4 Low), code review 0 Critical/High/Medium (3 Low).
 - 2026-10-19 - 12_02 - Done - SLA monitor (`SlaMonitor`, `EvaluateSla`, `SlaWarnAt`/`SlaWarnedAt`, `IX_Incidents_SlaCandidates`); 614 integration + 973 unit tests green with Docker, format clean; review pending.
 - 2026-10-19 - 12_02 - Blocked - Code, docs, migration and tests complete; build, format and 973 unit tests green; integration run waits for Docker.

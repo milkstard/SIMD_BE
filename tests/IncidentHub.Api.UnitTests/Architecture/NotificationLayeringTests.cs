@@ -38,7 +38,7 @@ public sealed class NotificationLayeringTests
     }
 
     [Fact]
-    public void AddNotificationSenders_RegistersTheThreeEmailHandlersKeyedByEventType()
+    public void AddNotificationSenders_RegistersTheEmailHandlersKeyedByEventType()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -52,6 +52,8 @@ public sealed class NotificationLayeringTests
             (nameof(IncidentReported), typeof(IncidentReportedEmailHandler)),
             (nameof(IncidentAssigned), typeof(IncidentAssignedEmailHandler)),
             (nameof(IncidentTransitioned), typeof(IncidentResolvedEmailHandler)),
+            (nameof(SlaWarning), typeof(SlaWarningEmailHandler)),
+            (nameof(SlaBreached), typeof(SlaBreachedEmailHandler)),
         })
         {
             var handler = scope.ServiceProvider.GetRequiredKeyedService<IOutboxMessageHandler>(key);

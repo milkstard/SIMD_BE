@@ -19,7 +19,7 @@ public sealed class IncidentAssignedEmailHandlerTests
     public IncidentAssignedEmailHandlerTests()
     {
         _handler = new IncidentAssignedEmailHandler(_kit.Reader, _kit.Delivery, NullLogger<IncidentAssignedEmailHandler>.Instance);
-        _kit.Reader.GetIncidentAsync(_incidentId, Arg.Any<CancellationToken>()).Returns(EmailTestKit.Facts());
+        _kit.Reader.GetIncidentAsync(_incidentId, Arg.Any<CancellationToken>()).Returns(EmailTestKit.Facts(assigneeId: _assignee));
         _kit.Reader.GetUserAsync(_assignee, Arg.Any<CancellationToken>()).Returns(new EmailRecipient("ana@example.com", "Ana"));
     }
 
@@ -67,6 +67,16 @@ public sealed class IncidentAssignedEmailHandlerTests
     public async Task Handle_SelfAssignment_SendsNothing()
     {
         await _handler.HandleAsync(Event(_actor, null), Guid.NewGuid(), CancellationToken.None);
+
+        _kit.Sent().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_CurrentAssigneeDiffers_SendsNothing()
+    {
+        _kit.Reader.GetIncidentAsync(_incidentId, Arg.Any<CancellationToken>()).Returns(EmailTestKit.Facts(assigneeId: Guid.NewGuid()));
+
+        await _handler.HandleAsync(Event(_assignee, null), Guid.NewGuid(), CancellationToken.None);
 
         _kit.Sent().Should().BeEmpty();
     }

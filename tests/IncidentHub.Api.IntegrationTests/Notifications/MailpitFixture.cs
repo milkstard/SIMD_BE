@@ -63,6 +63,17 @@ public sealed class MailpitFixture : IAsyncLifetime
             .ToList();
     }
 
+    /// <summary>The <c>Message-Id</c> of every message whose subject contains <paramref name="subjectFragment"/> right now, oldest first.</summary>
+    public async Task<IReadOnlyList<string>> ListMessageIdsAsync(string subjectFragment)
+    {
+        using var search = JsonDocument.Parse(
+            await _http.GetStringAsync($"{ApiBase}/search?query={Uri.EscapeDataString($"subject:\"{subjectFragment}\"")}&limit=200"));
+        return search.RootElement.GetProperty("messages").EnumerateArray()
+            .Reverse()
+            .Select(m => m.GetProperty("MessageID").GetString()!)
+            .ToList();
+    }
+
     /// <summary>Returns the raw header map of a message (header name to values).</summary>
     public async Task<JsonDocument> GetHeadersAsync(string messageId) =>
         JsonDocument.Parse(await _http.GetStringAsync($"{ApiBase}/message/{messageId}/headers"));

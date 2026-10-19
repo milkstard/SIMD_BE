@@ -147,6 +147,116 @@ public sealed class EmailDispatchTests(ApiFactory factory, MailpitFixture mailpi
         (await LoadOutboxAsync("IncidentTransitioned")).Should().ContainSingle().Which.ProcessedAt.Should().NotBeNull();
     }
 
+    // ---- SLA warning and breach ----
+
+    [Fact]
+    public async Task SlaWarning_Dispatched_MailsAssignee()
+    {
+        var seed = await SeedIncidentAsync();
+        await ChangeAsync(seed, i => i.Assign(seed.AssigneeId, null, seed.Responder, Before));
+        await ChangeAsync(seed, i => i.MarkSlaWarned(Before));
+        await using var worker = Worker();
+
+        await worker.RunAsync();
+
+        var warnings = (await mailpit.ListAsync(seed.Token)).Where(m => m.Subject.Contains("SLA warning")).ToList();
+        warnings.Should().ContainSingle().Which.To.Should().Be(seed.AssigneeEmail);
+        (await LoadOutboxAsync("SlaWarning")).Should().ContainSingle().Which.ProcessedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task SlaWarning_Unassigned_NoMail()
+    {
+        var seed = await SeedIncidentAsync();
+        await ChangeAsync(seed, i => i.MarkSlaWarned(Before));
+        await using var worker = Worker();
+
+        await worker.RunAsync();
+
+        (await mailpit.ListAsync(seed.Token)).Should().NotContain(m => m.Subject.Contains("SLA warning"));
+        (await LoadOutboxAsync("SlaWarning")).Should().ContainSingle().Which.ProcessedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task SlaWarning_ResolvedBeforeDispatch_NoMail()
+    {
+        var seed = await SeedIncidentAsync();
+        await ChangeAsync(seed, i => i.Assign(seed.AssigneeId, null, seed.Responder, Before));
+        await ChangeAsync(seed, i => i.MarkSlaWarned(Before));
+        await ChangeAsync(seed, i => i.TransitionTo(IncidentStatus.Triaged, seed.Responder, null, Before));
+        await ChangeAsync(seed, i => i.TransitionTo(IncidentStatus.InProgress, seed.Responder, null, Before));
+        await ChangeAsync(seed, i => i.TransitionTo(IncidentStatus.Resolved, seed.Responder, "Fixed", Before));
+        await using var worker = Worker();
+
+        await worker.RunAsync();
+
+        (await mailpit.ListAsync(seed.Token)).Should().NotContain(m => m.Subject.Contains("SLA warning"));
+    }
+
+    [Fact]
+    public async Task SlaBreached_Dispatched_MailsEscalationContact()
+    {
+        var seed = await SeedIncidentAsync();
+        await ChangeAsync(seed, i => i.MarkSlaBreached(Before));
+        await using var worker = Worker();
+
+        await worker.RunAsync();
+
+        var breaches = (await mailpit.ListAsync(seed.Token)).Where(m => m.Subject.Contains("SLA BREACHED")).ToList();
+        breaches.Should().ContainSingle().Which.To.Should().Be(seed.ContactEmail);
+        (await LoadOutboxAsync("SlaBreached")).Should().ContainSingle().Which.ProcessedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task SlaBreached_NoContact_MailsOwningTeam()
+    {
+        var seed = await SeedIncidentAsync(withContact: false);
+        await ChangeAsync(seed, i => i.MarkSlaBreached(Before));
+        await using var worker = Worker();
+
+        await worker.RunAsync();
+
+        var breaches = (await mailpit.ListAsync(seed.Token)).Where(m => m.Subject.Contains("SLA BREACHED")).ToList();
+        breaches.Should().ContainSingle().Which.To.Should().Be(seed.TeamEmail);
+    }
+
+    [Fact]
+    public async Task SlaBreached_Redelivery_SameMessageId()
+    {
+        var seed = await SeedIncidentAsync();
+        await ChangeAsync(seed, i => i.MarkSlaBreached(Before));
+        await using var worker = Worker();
+        await worker.RunAsync();
+
+        await using (var db = NewContext())
+        {
+            await db.OutboxMessages.Where(m => m.Type == "SlaBreached")
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.ProcessedAt, (DateTimeOffset?)null).SetProperty(m => m.Attempts, 0));
+        }
+
+        await worker.RunAsync();
+
+        var ids = await mailpit.ListMessageIdsAsync($"SLA BREACHED: Checkout fails {seed.Token}");
+        ids.Should().HaveCount(2);
+        ids.Distinct().Should().ContainSingle("a redelivery carries the same Message-Id");
+    }
+
+    [Fact]
+    public async Task SlaMails_TitleWithLineBreaks_StaysOnOneLine()
+    {
+        var seed = await SeedIncidentAsync("Checkout\r\nBcc: evil@example.com\nfails");
+        await ChangeAsync(seed, i => i.MarkSlaBreached(Before));
+        await using var worker = Worker();
+
+        await worker.RunAsync();
+
+        var breach = (await mailpit.ListAsync(seed.Token)).Single(m => m.Subject.Contains("SLA BREACHED"));
+        breach.Subject.Should().NotContainAny("\r", "\n").And.Contain("Checkout Bcc: evil@example.com fails");
+        using var message = await mailpit.WaitForMessageAsync($"SLA BREACHED: Checkout Bcc: evil@example.com fails {seed.Token}");
+        message.RootElement.GetProperty("Bcc").GetArrayLength().Should().Be(0);
+        message.RootElement.GetProperty("Text").GetString().Should().Contain($"Checkout Bcc: evil@example.com fails {seed.Token}");
+    }
+
     // ---- Other types, failures, concurrency ----
 
     [Fact]
@@ -257,7 +367,7 @@ public sealed class EmailDispatchTests(ApiFactory factory, MailpitFixture mailpi
     }
 
     /// <summary>A team, three users (reporter, responder, assignee), an application and one reported incident with a unique title token.</summary>
-    private static async Task<Seeded> SeedIncidentAsync(string titlePrefix = "Checkout fails")
+    private static async Task<Seeded> SeedIncidentAsync(string titlePrefix = "Checkout fails", bool withContact = true)
     {
         var token = Guid.NewGuid().ToString("N");
         await using var db = NewContext();
@@ -266,11 +376,13 @@ public sealed class EmailDispatchTests(ApiFactory factory, MailpitFixture mailpi
         var reporter = User.Create($"rep-{token}", "Rita Reporter", $"reporter-{token}@example.com", Before);
         var responder = User.Create($"res-{token}", "Rob Responder", $"responder-{token}@example.com", Before);
         var assignee = User.Create($"ass-{token}", "Ana Assignee", $"assignee-{token}@example.com", Before);
+        var contact = User.Create($"con-{token}", "Lee Contact", $"contact-{token}@example.com", Before);
         db.Teams.Add(team);
-        db.Users.AddRange(reporter, responder, assignee);
+        db.Users.AddRange(reporter, responder, assignee, contact);
         await db.SaveChangesAsync();
 
-        var app = MonitoredApp.Create($"App {token}", $"A{token[..12]}", team.Id, null, [AppEnvironment.Production]);
+        var app = MonitoredApp.Create(
+            $"App {token}", $"A{token[..12]}", team.Id, withContact ? contact.Id : null, [AppEnvironment.Production]);
         db.Applications.Add(app);
         await db.SaveChangesAsync();
 
@@ -291,7 +403,7 @@ public sealed class EmailDispatchTests(ApiFactory factory, MailpitFixture mailpi
 
         return new Seeded(
             incident.Id, token, team.Id, $"team-{token}@example.com", $"reporter-{token}@example.com", $"assignee-{token}@example.com",
-            assignee.Id, reporterActor, responderActor);
+            assignee.Id, reporterActor, responderActor, $"contact-{token}@example.com");
     }
 
     private sealed record Seeded(
@@ -303,7 +415,8 @@ public sealed class EmailDispatchTests(ApiFactory factory, MailpitFixture mailpi
         string AssigneeEmail,
         Guid AssigneeId,
         Actor Reporter,
-        Actor Responder);
+        Actor Responder,
+        string ContactEmail);
 
     /// <summary>The Worker's wiring in miniature: its own service provider, the real senders pointed at an SMTP host, a runner on a fake clock.</summary>
     private sealed class WorkerHarness : IAsyncDisposable

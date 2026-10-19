@@ -49,6 +49,8 @@ public static class NotificationServiceCollectionExtensions
         services.AddKeyedScoped<IOutboxMessageHandler, IncidentReportedEmailHandler>(nameof(IncidentReported));
         services.AddKeyedScoped<IOutboxMessageHandler, IncidentAssignedEmailHandler>(nameof(IncidentAssigned));
         services.AddKeyedScoped<IOutboxMessageHandler, IncidentResolvedEmailHandler>(nameof(IncidentTransitioned));
+        services.AddKeyedScoped<IOutboxMessageHandler, SlaWarningEmailHandler>(nameof(SlaWarning));
+        services.AddKeyedScoped<IOutboxMessageHandler, SlaBreachedEmailHandler>(nameof(SlaBreached));
 
         if (configuration.GetValue<bool>($"{EmailOptions.SectionName}:Enabled"))
         {

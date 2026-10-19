@@ -11,6 +11,8 @@ public sealed class IncidentEmailReader(IAppDbContext db) : IIncidentEmailReader
         var row = await (
                 from incident in db.Incidents.AsNoTracking()
                 join app in db.Applications.AsNoTracking() on incident.ApplicationId equals app.Id
+                join policy in db.SlaPolicies.AsNoTracking() on incident.Severity equals policy.Severity into policies
+                from policy in policies.DefaultIfEmpty()
                 where incident.Id == incidentId
                 select new
                 {
@@ -22,6 +24,11 @@ public sealed class IncidentEmailReader(IAppDbContext db) : IIncidentEmailReader
                     incident.Status,
                     incident.ReporterId,
                     app.OwningTeamId,
+                    incident.AssigneeId,
+                    incident.ResolveDueAt,
+                    incident.SlaWarnedAt,
+                    app.EscalationUserId,
+                    EscalateAtPercent = (int?)policy.EscalateAtPercent,
                 })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -35,7 +42,12 @@ public sealed class IncidentEmailReader(IAppDbContext db) : IIncidentEmailReader
                 row.Severity,
                 row.Status,
                 row.ReporterId,
-                row.OwningTeamId);
+                row.OwningTeamId,
+                row.AssigneeId,
+                row.ResolveDueAt,
+                row.SlaWarnedAt,
+                row.EscalationUserId,
+                row.EscalateAtPercent);
     }
 
     public Task<EmailRecipient?> GetUserAsync(Guid userId, CancellationToken cancellationToken) =>

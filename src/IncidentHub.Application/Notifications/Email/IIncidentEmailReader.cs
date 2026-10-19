@@ -12,7 +12,12 @@ public sealed record IncidentEmailFacts(
     Severity Severity,
     IncidentStatus Status,
     Guid ReporterId,
-    Guid OwningTeamId);
+    Guid OwningTeamId,
+    Guid? AssigneeId,
+    DateTimeOffset? ResolveDueAt,
+    DateTimeOffset? SlaWarnedAt,
+    Guid? EscalationUserId,
+    int? EscalateAtPercent);
 
 public sealed record EmailRecipient(string Address, string DisplayName);
 

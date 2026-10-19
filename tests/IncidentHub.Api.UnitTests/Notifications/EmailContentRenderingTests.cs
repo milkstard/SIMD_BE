@@ -15,7 +15,8 @@ public sealed class EmailContentRenderingTests
         new(Options.Create(new EmailOptions { PublicBaseUrl = "https://app.example.com" }));
 
     private static IncidentEmailFacts Facts(string title) => new(
-        "INC-1042", title, "Checkout <app>", AppEnvironment.Production, Severity.High, IncidentStatus.Resolved, Guid.NewGuid(), Guid.NewGuid());
+        "INC-1042", title, "Checkout <app>", AppEnvironment.Production, Severity.High, IncidentStatus.Resolved, Guid.NewGuid(), Guid.NewGuid(),
+        AssigneeId: null, ResolveDueAt: null, SlaWarnedAt: null, EscalationUserId: null, EscalateAtPercent: null);
 
     [Fact]
     public void Build_TitleWithMarkup_IsEncoded()

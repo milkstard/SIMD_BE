@@ -32,6 +32,15 @@ public sealed class IncidentAssignedEmailHandler(
             return;
         }
 
+        if (incident.AssigneeId != assigneeId)
+        {
+            logger.LogWarning(
+                "Assigned email skipped: incident {IncidentId} is no longer assigned to user {UserId}",
+                assigned.IncidentId,
+                assigneeId);
+            return;
+        }
+
         var assignee = await reader.GetUserAsync(assigneeId, cancellationToken);
         if (assignee is null || string.IsNullOrWhiteSpace(assignee.Address))
         {
