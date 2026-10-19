@@ -40,7 +40,7 @@ internal sealed class BroadcastClient : IAsyncDisposable
 
     /// <summary>Connects as the user and joins the dashboards of their teams; the call returns once the connection groups are live.</summary>
     public static async Task<BroadcastClient> ConnectAsync(
-        ApiFactory factory, string oid, UserRole role, WebApplicationFactory<Program>? host = null)
+        ApiFactory factory, string oid, UserRole role, WebApplicationFactory<Program>? host = null, bool joinDashboard = true)
     {
         host ??= factory;
         await factory.EnsureUserAsync(oid);
@@ -59,7 +59,16 @@ internal sealed class BroadcastClient : IAsyncDisposable
         await connection.StartAsync();
 
         // Hub methods run after OnConnectedAsync, so once this returns the user, team and responders groups are joined.
-        await connection.InvokeAsync("JoinDashboard");
+        // Without the dashboard the client is in the team group only, so it gets one copy of an event that targets both.
+        if (joinDashboard)
+        {
+            await connection.InvokeAsync("JoinDashboard");
+        }
+        else
+        {
+            await connection.InvokeAsync("LeaveDashboard"); // a no-op that still waits for OnConnectedAsync to finish
+        }
+
         return client;
     }
 

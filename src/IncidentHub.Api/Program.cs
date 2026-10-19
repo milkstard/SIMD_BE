@@ -9,6 +9,7 @@ using IncidentHub.Application;
 using IncidentHub.Application.Abstractions;
 using IncidentHub.Application.Realtime;
 using IncidentHub.Infrastructure;
+using IncidentHub.Infrastructure.Realtime;
 using IncidentHub.Infrastructure.Telemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -52,6 +53,7 @@ builder.Services.AddSignalR()
 builder.Services.AddSingleton<IDashboardBroadcaster, HubDashboardBroadcaster>();
 builder.Services.AddSingleton<DashboardThrottle>();
 builder.Services.AddSingleton<IPostCommitDispatcher, HubPostCommitDispatcher>();
+builder.Services.AddChangeRelay(); // after the dispatcher: the relay hands the Worker's changes to it
 
 var app = builder.Build();
 

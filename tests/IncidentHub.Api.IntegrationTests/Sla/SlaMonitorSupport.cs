@@ -21,9 +21,10 @@ internal sealed class SlaMonitorSupport(ApiFactory factory)
     public async Task<Guid> SeedAsync(
         DateTimeOffset warnAt,
         DateTimeOffset dueAt,
-        Action<Incident, Actor, DateTimeOffset>? move = null)
+        Action<Incident, Actor, DateTimeOffset>? move = null,
+        Guid? applicationId = null)
     {
-        var appId = await factory.CreateAppAsync();
+        var appId = applicationId ?? await factory.CreateAppAsync();
         var (id, _) = await _seeder.AddIncidentAsync(
             appId,
             $"SLA monitor {Guid.NewGuid():N}",

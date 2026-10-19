@@ -217,6 +217,19 @@ public sealed class IncidentBroadcasterTests
     }
 
     [Fact]
+    public async Task IncidentBroadcaster_SlaBreach_SendsIncidentUpdatedAndLeavesAppStatusAlone()
+    {
+        GivenIncident();
+
+        var plan = await Sut.PlanAsync([new IncidentUpdated(_incidentId, ["IsSlaBreached"], null, Now), new SlaBreached(_incidentId, Now)], default);
+
+        var message = plan.Messages.Should().ContainSingle().Which.Should().BeOfType<IncidentUpdatedMessage>().Subject;
+        message.Targets.Should().Contain(new BroadcastTarget(BroadcastAudience.Incident, _incidentId));
+        plan.DashboardTeamIds.Should().Equal(_teamId);
+        await _statuses.DidNotReceiveWithAnyArgs().RefreshAsync(default, default);
+    }
+
+    [Fact]
     public async Task IncidentBroadcaster_ReportedAndTransitioned_RefreshesOnce()
     {
         GivenIncident();

@@ -12,7 +12,7 @@ namespace IncidentHub.Infrastructure.Caching;
 
 /// <summary>
 /// Derived application status: Redis first, SQL on a miss or when Redis fails. Entries are overwritten after every relevant
-/// incident change (<see cref="RefreshAsync"/>); the 60 s TTL heals changes made outside the API (the Worker), which do not refresh.
+/// incident change (<see cref="RefreshAsync"/>); the 60 s TTL heals changes made outside the API. The Worker's only incident change (an SLA breach) does not alter the derived status.
 /// Cache errors are logged and never reach the caller.
 /// </summary>
 public sealed class RedisAppStatusReader(AppDbContext db, IConnectionMultiplexer redis, ILogger<RedisAppStatusReader> logger) : IAppStatusReader

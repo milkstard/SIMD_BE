@@ -311,13 +311,13 @@ interface AppStatusItem {
 | GET | `/dashboard/summary?range=7d` | `200` `DashboardSummary` |
 | GET | `/dashboard/app-status` | `200` `AppStatusItem[]` |
 
-`/dashboard/app-status` (any signed-in role): one item per **active** application owned by a team the caller belongs to (Admin included), ordered by `name`. The status is **derived, never set**: an open Critical incident in Production → `Outage`; any other open Critical or High → `Degraded`; otherwise `Operational`. Open means every status except `Resolved` and `Closed` (`Reopened` counts). `since` is the earliest creation time of the incidents that cause the current status (`null` when `Operational`). The value is cached for at most 60 s and refreshed on every incident change made through the API; a change made by the Worker (SLA breach) can show up to 60 s late.
+`/dashboard/app-status` (any signed-in role): one item per **active** application owned by a team the caller belongs to (Admin included), ordered by `name`. The status is **derived, never set**: an open Critical incident in Production → `Outage`; any other open Critical or High → `Degraded`; otherwise `Operational`. Open means every status except `Resolved` and `Closed` (`Reopened` counts). `since` is the earliest creation time of the incidents that cause the current status (`null` when `Operational`). The value is cached for at most 60 s and refreshed on every incident change made through the API. The Worker's only incident change, an SLA breach, does not alter the derived status.
 
 `/dashboard/summary?range=24h|7d|30d` (any signed-in role; `range` defaults to `7d`, any other value is `422` on `range`): the summary of the applications owned by a team the caller belongs to (Admin included); another team's incidents never count. The window is whole UTC days ending now: `24h` is today only, `7d` the last 7 days including today, `30d` the last 30.
 - `openTotal`, `unassigned`, `slaBreached`, `openBySeverity` (all four severities, zero-filled) and `openByApplication` describe the current state, not the window; "open" is the same as for app status (every status except `Resolved` and `Closed`). `openByApplication` lists only applications with open incidents, ordered by `open` desc then name.
 - `mttaMinutes` is the mean of `acknowledgedAt - createdAt` over incidents acknowledged in the window, `mttrMinutes` the mean of `resolvedAt - createdAt` over incidents resolved in it, both in minutes rounded to 1 decimal; `null` when none qualifies.
 - `trend` has exactly one point per UTC day of the window, ascending, zero-filled: `reported` = incidents created that day, `resolved` = incidents resolved that day.
-- The value is cached for 5 s; `generatedAt` is the time it was computed, so a client can read the cache age. The Worker's changes (SLA breach) show up within that TTL.
+- The value is cached for 5 s; `generatedAt` is the time it was computed, so a client can read the cache age. An SLA breach set by the Worker refreshes the cache and pushes `DashboardChanged` within a few seconds of its commit (if the relay is down, within that TTL).
 | GET | `/reports/incidents.csv?from=&to=&applicationId=` | `200` `text/csv` |
 
 ### Notifications and current user
@@ -501,7 +501,8 @@ Notes on the events above:
 - An internal `CommentAdded` goes to `responders:{teamId}` only, never to `incident:{id}`.
 - Linking files sends no event of its own: a new incident's files are in the detail read after `IncidentCreated`, a comment's in `CommentAdded.comment.attachments`.
 - `DashboardChanged` is capped at one per second per team and per API instance; its payload is the owning team's own `7d` summary, computed after the commit. A user who belongs to several teams receives one event per team, and `GET /dashboard/summary` covers all of their teams, so a client must refetch the summary on `DashboardChanged` rather than replace its data with the payload (clients on `24h` or `30d` refetch for the same reason).
-- Changes made by the Worker (SLA breach, webhook-created incidents) are not broadcast yet.
+- An SLA breach set by the Worker is relayed to the API instances over Redis (channel `incidenthub:changes`, ids only) and broadcast like a local change: `IncidentUpdated` (`isSlaBreached: true`) and `DashboardChanged`, within a few seconds of the Worker's commit. A breach does not change the derived application status, so no `AppStatusChanged` follows. Delivery is best-effort like the other events; if Redis pub/sub is unavailable the change shows on the next read or refetch. Webhook-created incidents are not broadcast yet.
+- A client that is in both the `dashboard:{teamId}` and the `team:{teamId}` group receives an `IncidentUpdated` once per group (a connection that did not call `JoinDashboard` receives it once). Clients refetch by incident id, so a duplicate is harmless.
 
 Events are sent **after** the database commit. Delivery is best-effort: on reconnect the client
 refetches (`invalidateQueries`), so events never need to be replayed.

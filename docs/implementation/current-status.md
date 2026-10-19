@@ -7,6 +7,48 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/12_04_worker-change-propagation.md` (BE-12, part 4 of 4) |
+| State | Done <!-- Planned - In progress - Blocked - Done --> |
+| Started | 2026-10-19 |
+| Last updated | 2026-10-19 |
+| Branch / commit | main / `aa707b7` (12_04 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (12_04 section 9), `API-CONTRACT.md` section 7 notes, deferred/completed items
+- [x] Infrastructure: `IncidentChangeMessage`, `ProcessOrigin`, `RedisChangePublisher` (`IPostCommitDispatcher`), `RedisChangeSubscriber` (BackgroundService, relay claim), DI extensions
+- [x] Worker: publisher replaces the no-op dispatcher; Api: subscriber registered
+- [x] Tests written (unit, integration)
+- [x] Build, format, unit tests
+- [x] Full integration suite run with Docker
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` run, no changes.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 502, Application 329, Worker 7, Api.UnitTests 176 passed, 0 failed (new: `RedisChangePublisherTests` 5, `RedisChangeSubscriberTests` 13 incl. 5 malformed-payload cases, `IncidentBroadcasterTests` SLA-breach case).
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 627/627 passed in 3 m 33 s (new `Sla/WorkerChangePropagationTests` 6: client receives `IncidentUpdated`, summary cache refreshed, no `AppStatusChanged`, Redis down still commits, two API instances deliver once, API commit not relayed twice).
+- Mutation check: with the relay claim disabled `Breach_TwoApiInstances_EachClientReceivesTheEventOnce` fails (2 copies), so the claim is what gives exactly-once delivery.
+- A first full run failed 192 of 627 tests in 22 min; its output was truncated by my own `tail`, so the failures were not captured. The immediate rerun with full logging was green (627/627), so it looks like the Docker environment (the status notes record the same pattern in earlier specs), but the cause is not confirmed.
+- `contracts/swagger.json` unchanged (no endpoint or DTO change).
+- Finding (pre-existing): a connection in both `dashboard:{teamId}` and `team:{teamId}` gets an `IncidentUpdated` once per group; documented in `API-CONTRACT.md` section 7. The new tests use a client that skips `JoinDashboard` (`BroadcastClient.ConnectAsync(..., joinDashboard: false)`) to count deliveries.
+
+### Decisions (2026-10-19)
+OQ 1 Redis pub/sub on `incidenthub:changes`; OQ 2 relay `IncidentUpdated` only; OQ 3 implement now. A breach does not change the derived app status, so no status refresh (criterion 2 corrected). The existing `IPostCommitDispatcher` is the port on both sides (no new Application ports). The SignalR backplane already reaches every instance, so each message is claimed in Redis by one API instance before it is dispatched.
+
+### Blockers / open questions
+None.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1641/1641 passed (integration 627), 0 proposed tests required, 7 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 3 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 7 Low |
+
+Verdict: **Approved**. Open non-blocking items: the subscriber loop catches only `RedisException`/`TimeoutException`, so any other exception type would stop the API host (SEC-1, QA, code review L2: catch `Exception` except cancellation); the subscription queue is never unsubscribed, so a restart after an enumeration failure leaves an unread queue buffering (L1); no payload-size or `ChangedFields` limits on a forged message (SEC-2: cap size, field count and names); the channel is unauthenticated, accepted because the SignalR backplane trusts Redis the same way (SEC-3; restrict the Redis ACL and network in BE-18); no test of the resubscribe loop and no test that the Worker resolves `RedisChangePublisher` and the API hosts `RedisChangeSubscriber` (QA); fixed 1 s delays in the "no second copy" assertions (QA); the claim winner crashing between claim and dispatch loses that message (accepted, best-effort); code review L3 the `Origin` guard is dead code in production (only protects a host that registers both), L4 the `AddChangeRelay` ordering comment is wrong and `Replace` depends on `AddInfrastructure` running first, L5 `ProcessOrigin`/`ChangeChannel` share a file with the message record, L6 a 2 s cap mid-loop drops the remaining updates of that save, L7 `PostCommitHook.Timeout` reused by the subscriber. Not performed: a manual two-process smoke test with the real Worker and API, repeated full-suite runs (one earlier run failed 192 tests with uncaptured output; QA's run and the rerun were green). Fixed after the review (2026-10-19): SEC-1/L2 (the subscriber loop catches any exception and retries), L1 (the queue is unsubscribed before a resubscribe and on shutdown), the resubscribe loop now has a test (2 cases), and the spec header is Approved. Still open: SEC-2, SEC-3, L3-L7, the DI-wiring test, the fixed 1 s delays. After these fixes the unit suite, format and the full integration suite (627/627, 3 m 34 s, with Docker) are green.
+
+## Previous implementation (12_03)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/12_03_sla-emails.md` (BE-12, part 3 of 4) |
 | State | Done <!-- Planned - In progress - Blocked - Done --> |
 | Started | 2026-10-19 |
@@ -469,6 +511,10 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-19 - 12_04 - Fixed - Review SEC-1/L2 (subscriber retries on any exception) and L1 (unsubscribe), resubscribe test, spec header Approved; build 0 warnings, format clean, unit tests and 627/627 integration tests green with Docker.
+- 2026-10-19 - 12_04 - Reviewed - Approved - QA 1641/1641 (7 Low), security 0 Critical/High/Medium (3 Low), code review 0 Critical/High/Medium (7 Low).
+- 2026-10-19 - 12_04 - Done - Worker-to-API change relay over Redis pub/sub (`RedisChangePublisher`, `RedisChangeSubscriber`, one relayer per message); 627 integration + 1014 unit tests green with Docker, format clean; review pending.
+- 2026-10-19 - 12_04 - In progress - Started; Worker-to-API change relay over Redis pub/sub; pulls in two deferred items (cache invalidation, SLA-breach broadcast).
 - 2026-10-19 - 12_03 - Fixed - Review SEC-1 (Resolved mail `Note` collapsed to one line) and code review L3 (no null defaults on the new `IncidentEmailFacts` parameters); build 0 warnings, format clean, 995 unit + 621 integration tests green with Docker.
 - 2026-10-19 - 12_03 - Reviewed - Approved - QA 1615/1615 (5 Low), security 0 Critical/High/Medium (2 Low), code review 0 Critical/High/Medium (4 Low).
 - 2026-10-19 - 12_03 - Done - SLA warning/breach emails (`SlaWarningEmailHandler`, `SlaBreachedEmailHandler`), 10_03 SEC-1/SEC-2 closed; 621 integration + 994 unit tests green with Docker, format clean; review pending.
