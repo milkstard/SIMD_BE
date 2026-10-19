@@ -258,6 +258,12 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<DateTimeOffset?>("SlaWarnAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset?>("SlaWarnedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -297,6 +303,12 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_Incidents_Number");
 
                     b.HasIndex("ReporterId");
+
+                    b.HasIndex("ResolveDueAt")
+                        .HasDatabaseName("IX_Incidents_SlaCandidates")
+                        .HasFilter("[IsSlaBreached] = 0 AND [Status] <> 'Resolved' AND [Status] <> 'Closed'");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ResolveDueAt"), new[] { "SlaWarnAt", "SlaWarnedAt" });
 
                     b.HasIndex("ApplicationId", "CreatedAt")
                         .HasDatabaseName("IX_Incidents_Application_CreatedAt");

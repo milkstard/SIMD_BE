@@ -142,7 +142,7 @@ public sealed class IncidentPersistenceTests(ApiFactory factory)
         var incident = NewIncident(seed, Unique("round-trip"));
         incident.Assign(seed.ResponderId, null, seed.Responder, T0.AddMinutes(1));
         incident.Update(new IncidentChanges { Priority = Priority.P2, Environment = AppEnvironment.UAT }, seed.Responder, T0.AddMinutes(2));
-        incident.ChangeSeverity(Severity.Critical, "outage", T0.AddMinutes(17), T0.AddHours(4), seed.Responder, T0.AddMinutes(3));
+        incident.ChangeSeverity(Severity.Critical, "outage", T0.AddMinutes(17), T0.AddHours(4), T0.AddHours(3), seed.Responder, T0.AddMinutes(3));
         await using (var db = NewContext())
         {
             db.Incidents.Add(incident);

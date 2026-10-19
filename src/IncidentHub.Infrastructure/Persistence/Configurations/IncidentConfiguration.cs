@@ -45,6 +45,10 @@ public sealed class IncidentConfiguration : IEntityTypeConfiguration<Incident>
             .IsUnique()
             .HasFilter("[Status] <> 'Closed' AND [Fingerprint] IS NOT NULL")
             .HasDatabaseName(FingerprintIndexName);
+        builder.HasIndex(i => i.ResolveDueAt)
+            .IncludeProperties(i => new { i.SlaWarnAt, i.SlaWarnedAt })
+            .HasFilter("[IsSlaBreached] = 0 AND [Status] <> 'Resolved' AND [Status] <> 'Closed'")
+            .HasDatabaseName("IX_Incidents_SlaCandidates");
 
         builder.HasOne<MonitoredApp>().WithMany().HasForeignKey(i => i.ApplicationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(i => i.ReporterId).OnDelete(DeleteBehavior.Restrict);

@@ -23,6 +23,20 @@ public sealed class SlaClockTests
         due.ResolveDueAt.Should().Be(T0.AddMinutes(resolveMinutes));
     }
 
+    [Theory]
+    [InlineData(240, 80, 192)]
+    [InlineData(480, 50, 240)]
+    [InlineData(15, 99, 14.85)]
+    public void DueTimes_EscalatePercent_ComputesWarnAt(int resolveMinutes, int percent, double warnMinutes)
+    {
+        var policy = new SlaPolicy(Severity.High, 10, resolveMinutes, percent);
+
+        var due = SlaClock.DueTimes(policy, T0);
+
+        due.WarnAt.Should().Be(T0.AddMinutes(warnMinutes));
+        due.WarnAt.Should().BeBefore(due.ResolveDueAt);
+    }
+
     [Fact]
     public void DueTimes_NonUtcOffset_ReturnsUtc()
     {

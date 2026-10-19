@@ -4,6 +4,7 @@ using IncidentHub.Domain.Incidents.Sla;
 using IncidentHub.Domain.Teams;
 using IncidentHub.Domain.Users;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace IncidentHub.Application.Abstractions;
 
@@ -28,6 +29,9 @@ public interface IAppDbContext
     DbSet<Attachment> Attachments { get; }
 
     DbSet<SlaPolicySetting> SlaPolicies { get; }
+
+    /// <summary>Lets a Worker use case drop the tracked state of an aggregate whose save failed.</summary>
+    ChangeTracker ChangeTracker { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

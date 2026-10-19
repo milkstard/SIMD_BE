@@ -7,6 +7,48 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/12_02_sla-monitor.md` (BE-12, part 2 of 4) |
+| State | Done <!-- Planned - In progress - Blocked - Done --> |
+| Started | 2026-10-19 |
+| Last updated | 2026-10-19 |
+| Branch / commit | main / `b82fe43` (12_02 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (12_02 section 9), `DATABASE.md` (`SlaWarnAt`, `SlaWarnedAt`, index, outbox types)
+- [x] Domain: `SlaDueTimes.WarnAt`, `Incident.SlaWarnAt/SlaWarnedAt`, `MarkSlaWarned`, `SlaWarning`/`SlaBreached` events, `SlaEvaluation`
+- [x] Application: `Sla/EvaluateSla` command + handler, `IAppDbContext.ChangeTracker`, callers pass `WarnAt`
+- [x] Infrastructure: configuration, migration `AddIncidentSlaWarn` (columns, backfill, `IX_Incidents_SlaCandidates`)
+- [x] Worker: `SlaMonitor` job (Redis lock `sla-monitor`, 1 min), registration, span `sla.evaluate`
+- [x] Tests written (Domain, Worker unit, integration, opt-in plan test)
+- [x] Build, format, unit tests
+- [x] Full integration suite run with Docker
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` run.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 502, Application 306, Worker 7, Api.UnitTests 158 passed, 0 failed (new: `SlaEvaluationTests`, `SlaClockTests` warn cases, `IncidentTests` warn/breach cases, `SlaMonitorJobTests` 3).
+- `contracts/swagger.json`: regenerated with `scripts/generate-openapi.ps1`, no diff.
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 614/614 passed (new: `EvaluateSlaHandlerTests` 10, `SlaMonitorTests` 4). The opt-in `SlaCandidatesQueryPlanTests` passed: the candidate query is an `Index Seek` on `IX_Incidents_SlaCandidates` (50k rows, pass 164 ms).
+- Finding: SQL Server rejects `NOT IN` in a filtered-index predicate (`Incorrect syntax near 'NOT'`, which failed every integration test at fixture start). The index filter is now `[IsSlaBreached] = 0 AND [Status] <> 'Resolved' AND [Status] <> 'Closed'` (configuration, migration, designer, snapshot, `DATABASE.md`). The migration backfill SQL ran in these tests (migrations are applied at fixture start).
+
+### Decisions (2026-10-19)
+Open questions 1-6 accepted as proposed; handler tests in `Api.IntegrationTests` (spec 12_02 section 9). The integration project does not reference the Worker (its `Program`/`appsettings.json` would clash with the Api's), so the lock contention criterion is covered by `SlaMonitorJobTests` (fake lock) plus the existing `RedisDistributedLockTests`; the integration tests drive `EvaluateSlaHandler` directly.
+
+### Blockers / open questions
+None. Review pending (`/review-spec`).
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1587/1587 passed (integration 614) + plan test 1/1, 0 proposed tests required, 5 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 4 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 3 Low |
+
+Verdict: **Approved**. Open non-blocking items: SEC-1 the lock TTL (2 min) is not renewed and a pass has no time or work bound (add a per-pass deadline or page cap, like the outbox `PassBudget`); SEC-2 the migration backfill leaves `SlaWarnAt` NULL for a severity with no policy row (COALESCE to 80) and bursts notifications on the first tick; SEC-3 `IAppDbContext.ChangeTracker` exposes the whole tracker (a narrow `ClearTracked()` would do); SEC-4 a poison incident logs an Error every minute; code review L1 `IsSlaBreached` stays true after a severity change, so the restarted clock is never watched (state in the spec that the flag is sticky, or reset it with a history row), L2 a concurrency conflict counts as `Failed` (add a `Conflict` counter), L3 note only; QA Lows: the backfill SQL is untested (add a migrate-back/forward test), the generic exception branch of `EvaluateAsync` is untested, the real-Redis two-replica test is replaced by a fake-lock unit test (accepted deviation), test seeds use real `UtcNow`, the candidate query reads the whole filtered index each tick (fine at 50k rows); the spec header still says Draft.
+
+## Previous implementation (12_01)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/12_01_sla-policies-table-and-admin-api.md` (BE-12, part 1 of 4) |
 | State | Done <!-- Planned - In progress - Blocked - Done --> |
 | Started | 2026-10-19 |
@@ -388,6 +430,10 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-19 - 12_02 - Reviewed - Approved - QA 1587/1587 (5 Low), security 0 Critical/High/Medium (4 Low), code review 0 Critical/High/Medium (3 Low).
+- 2026-10-19 - 12_02 - Done - SLA monitor (`SlaMonitor`, `EvaluateSla`, `SlaWarnAt`/`SlaWarnedAt`, `IX_Incidents_SlaCandidates`); 614 integration + 973 unit tests green with Docker, format clean; review pending.
+- 2026-10-19 - 12_02 - Blocked - Code, docs, migration and tests complete; build, format and 973 unit tests green; integration run waits for Docker.
+- 2026-10-19 - 12_02 - In progress - Started; SLA monitor (warning and breach detection), `SlaWarnAt`/`SlaWarnedAt` columns; no deferred item involved.
 - 2026-10-19 - 12_01 - Reviewed - Approved - QA 1541/1541 (5 Low), security 0 Critical/High/Medium (2 Low), code review 0 Critical/High/Medium (4 Low).
 - 2026-10-19 - 12_01 - Done - `SlaPolicies` table, `DbSlaPolicyProvider`, `GET/PUT /sla-policies`; 600 integration + 941 unit tests green with Docker, format clean; review pending.
 - 2026-10-19 - 12_01 - Blocked - Code, docs, migration and tests complete; build, format and unit tests green; integration run waits for Docker.

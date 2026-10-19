@@ -18,6 +18,7 @@ builder.Services.AddSingleton<ICurrentUser, SystemCurrentUser>();
 builder.Services.AddHostedService<AttachmentScanJob>();
 builder.Services.AddHostedService<OrphanAttachmentJob>();
 builder.Services.AddHostedService<OutboxDispatcher>();
+builder.Services.AddHostedService<SlaMonitor>();
 
 var host = builder.Build();
 host.Run();

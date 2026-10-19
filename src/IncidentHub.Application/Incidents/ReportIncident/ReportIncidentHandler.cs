@@ -80,7 +80,7 @@ public sealed class ReportIncidentHandler(
 
         var policy = await slaPolicies.GetAsync(request.Severity, cancellationToken);
         var due = SlaClock.DueTimes(policy, incident.CreatedAt);
-        incident.SetSlaDueTimes(due.AckDueAt, due.ResolveDueAt);
+        incident.SetSlaDueTimes(due.AckDueAt, due.ResolveDueAt, due.WarnAt);
 
         db.Incidents.Add(incident);
         try

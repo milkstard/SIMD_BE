@@ -483,7 +483,7 @@ public sealed class IncidentTests
     {
         var incident = Report();
 
-        var act = () => incident.ChangeSeverity(Severity.Critical, " ", Later, Later.AddHours(4), Responder(), Later);
+        var act = () => incident.ChangeSeverity(Severity.Critical, " ", Later, Later.AddHours(4), Later.AddHours(3), Responder(), Later);
 
         act.Should().Throw<ArgumentException>();
     }
@@ -495,11 +495,12 @@ public sealed class IncidentTests
         incident.ClearDomainEvents();
         var actor = Responder();
 
-        incident.ChangeSeverity(Severity.Critical, "Full outage", Later.AddMinutes(15), Later.AddHours(4), actor, Later);
+        incident.ChangeSeverity(Severity.Critical, "Full outage", Later.AddMinutes(15), Later.AddHours(4), Later.AddHours(3), actor, Later);
 
         incident.Severity.Should().Be(Severity.Critical);
         incident.AckDueAt.Should().Be(Later.AddMinutes(15));
         incident.ResolveDueAt.Should().Be(Later.AddHours(4));
+        incident.SlaWarnAt.Should().Be(Later.AddHours(3));
         incident.History.Last().Should().Match<IncidentHistory>(h =>
             h.Field == "Severity" && h.OldValue == "High" && h.NewValue == "Critical" && h.Note == "Full outage" && h.ActorId == actor.UserId);
         incident.DomainEvents.Should().ContainSingle().Which.Should().BeOfType<IncidentUpdated>()
@@ -513,7 +514,7 @@ public sealed class IncidentTests
         incident.ClearDomainEvents();
         var before = incident.History.Count;
 
-        incident.ChangeSeverity(Severity.High, "same", Later, Later.AddHours(4), Responder(), Later);
+        incident.ChangeSeverity(Severity.High, "same", Later, Later.AddHours(4), Later.AddHours(3), Responder(), Later);
 
         incident.History.Should().HaveCount(before);
         incident.DomainEvents.Should().BeEmpty();
@@ -525,7 +526,7 @@ public sealed class IncidentTests
     {
         var f = Build(IncidentStatus.Closed);
 
-        var act = () => f.Incident.ChangeSeverity(Severity.Low, "r", Later, Later, f.ActorOf(ActorKind.Responder), Later);
+        var act = () => f.Incident.ChangeSeverity(Severity.Low, "r", Later, Later, Later, f.ActorOf(ActorKind.Responder), Later);
 
         act.Should().Throw<IncidentClosedException>();
     }
@@ -537,10 +538,12 @@ public sealed class IncidentTests
         incident.ClearDomainEvents();
         var before = incident.History.Count;
 
-        incident.SetSlaDueTimes(Now.AddHours(1), Now.AddHours(8));
+        incident.SetSlaDueTimes(Now.AddHours(1), Now.AddHours(8), Now.AddHours(6));
 
         incident.AckDueAt.Should().Be(Now.AddHours(1));
         incident.ResolveDueAt.Should().Be(Now.AddHours(8));
+        incident.SlaWarnAt.Should().Be(Now.AddHours(6));
+        incident.SlaWarnedAt.Should().BeNull();
         incident.History.Should().HaveCount(before);
         incident.DomainEvents.Should().BeEmpty();
     }
@@ -556,7 +559,20 @@ public sealed class IncidentTests
         incident.IsSlaBreached.Should().BeTrue();
         incident.History.Last().Should().Match<IncidentHistory>(h =>
             h.Field == "IsSlaBreached" && h.OldValue == "False" && h.NewValue == "True" && h.ActorId == null);
-        incident.DomainEvents.Should().ContainSingle().Which.Should().BeOfType<IncidentUpdated>();
+        incident.DomainEvents.Should().HaveCount(2);
+        incident.DomainEvents.Should().ContainSingle(e => e is IncidentUpdated);
+    }
+
+    [Fact]
+    public void MarkSlaBreached_FirstCall_RaisesSlaBreachedEvent()
+    {
+        var incident = Report();
+        incident.ClearDomainEvents();
+
+        incident.MarkSlaBreached(Later);
+
+        incident.DomainEvents.OfType<SlaBreached>().Should().ContainSingle()
+            .Which.Should().Be(new SlaBreached(incident.Id, Later));
     }
 
     [Fact]
@@ -571,6 +587,63 @@ public sealed class IncidentTests
 
         incident.History.Should().HaveCount(before);
         incident.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MarkSlaWarned_FirstCall_RaisesEventNoHistory()
+    {
+        var incident = Report();
+        incident.ClearDomainEvents();
+        var history = incident.History.Count;
+        var updatedAt = incident.UpdatedAt;
+
+        incident.MarkSlaWarned(Later);
+
+        incident.SlaWarnedAt.Should().Be(Later);
+        incident.DomainEvents.Should().ContainSingle().Which.Should().Be(new SlaWarning(incident.Id, Later));
+        incident.History.Should().HaveCount(history);
+        incident.UpdatedAt.Should().Be(updatedAt);
+    }
+
+    [Fact]
+    public void MarkSlaWarned_Twice_IsNoOp()
+    {
+        var incident = Report();
+        incident.MarkSlaWarned(Later);
+        incident.ClearDomainEvents();
+
+        incident.MarkSlaWarned(Later.AddMinutes(1));
+
+        incident.SlaWarnedAt.Should().Be(Later);
+        incident.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void MarkSlaWarned_AlreadyBreached_IsNoOp()
+    {
+        var incident = Report();
+        incident.MarkSlaBreached(Later);
+        incident.ClearDomainEvents();
+
+        incident.MarkSlaWarned(Later.AddMinutes(1));
+
+        incident.SlaWarnedAt.Should().BeNull();
+        incident.DomainEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ChangeSeverity_AfterWarning_ClearsWarnedAndRecomputesWarnAt()
+    {
+        var incident = Report();
+        incident.SetSlaDueTimes(Now.AddHours(1), Now.AddHours(8), Now.AddHours(6));
+        incident.MarkSlaWarned(Now.AddHours(6));
+        incident.ClearDomainEvents();
+
+        incident.ChangeSeverity(Severity.Critical, "Full outage", Later.AddMinutes(15), Later.AddHours(4), Later.AddHours(3), Responder(), Later);
+
+        incident.SlaWarnedAt.Should().BeNull();
+        incident.SlaWarnAt.Should().Be(Later.AddHours(3));
+        incident.ResolveDueAt.Should().Be(Later.AddHours(4));
     }
 
     // ---- Encapsulation ----

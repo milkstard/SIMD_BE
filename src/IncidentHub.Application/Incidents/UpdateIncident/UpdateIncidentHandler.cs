@@ -87,7 +87,7 @@ public sealed class UpdateIncidentHandler(
             var severity = request.Severity.Value!.Value;
             var policy = await slaPolicies.GetAsync(severity, cancellationToken);
             var due = SlaClock.DueTimes(policy, now);
-            incident.ChangeSeverity(severity, request.Reason!, due.AckDueAt, due.ResolveDueAt, actor, now);
+            incident.ChangeSeverity(severity, request.Reason!, due.AckDueAt, due.ResolveDueAt, due.WarnAt, actor, now);
         }
 
         await db.SaveChangesAsync(cancellationToken);

@@ -68,6 +68,12 @@ public sealed class Incident : AggregateRoot
 
     public bool IsSlaBreached { get; private set; }
 
+    /// <summary>When the warning is due; stored with the due times so a policy edit never moves it.</summary>
+    public DateTimeOffset? SlaWarnAt { get; private set; }
+
+    /// <summary>Null until the warning was raised; the dedup marker. Cleared when the SLA clock restarts.</summary>
+    public DateTimeOffset? SlaWarnedAt { get; private set; }
+
     public DateTimeOffset? AcknowledgedAt { get; private set; }
 
     public DateTimeOffset? ResolvedAt { get; private set; }
@@ -378,6 +384,7 @@ public sealed class Incident : AggregateRoot
         string reason,
         DateTimeOffset ackDueAt,
         DateTimeOffset resolveDueAt,
+        DateTimeOffset warnAt,
         Actor actor,
         DateTimeOffset at)
     {
@@ -396,15 +403,33 @@ public sealed class Incident : AggregateRoot
         Severity = severity;
         AckDueAt = ackDueAt;
         ResolveDueAt = resolveDueAt;
+        SlaWarnAt = warnAt;
+        SlaWarnedAt = null;
         UpdatedAt = at;
         Raise(new IncidentUpdated(Id, [nameof(Severity)], actorId, at));
     }
 
     /// <summary>Sets the SLA due times when the incident is created. Not an auditable change, so no history or event.</summary>
-    public void SetSlaDueTimes(DateTimeOffset ackDueAt, DateTimeOffset resolveDueAt)
+    public void SetSlaDueTimes(DateTimeOffset ackDueAt, DateTimeOffset resolveDueAt, DateTimeOffset warnAt)
     {
         AckDueAt = ackDueAt;
         ResolveDueAt = resolveDueAt;
+        SlaWarnAt = warnAt;
+    }
+
+    /// <summary>
+    /// Records that the escalation percentage of the resolve window was reached. Idempotent, and a no-op once breached.
+    /// An internal marker: no history row and no <c>UpdatedAt</c> change.
+    /// </summary>
+    public void MarkSlaWarned(DateTimeOffset at)
+    {
+        if (SlaWarnedAt is not null || IsSlaBreached)
+        {
+            return;
+        }
+
+        SlaWarnedAt = at;
+        Raise(new SlaWarning(Id, at));
     }
 
     /// <summary>Flags the resolve SLA as breached. Idempotent; recorded as a system action.</summary>
@@ -419,6 +444,7 @@ public sealed class Incident : AggregateRoot
         UpdatedAt = at;
         AddHistory(nameof(IsSlaBreached), false, true, null, ActorIdOf(Actor.System), at);
         Raise(new IncidentUpdated(Id, [nameof(IsSlaBreached)], null, at));
+        Raise(new SlaBreached(Id, at));
     }
 
     private static Guid? ActorIdOf(Actor actor) => actor.IsSystem ? null : actor.UserId;

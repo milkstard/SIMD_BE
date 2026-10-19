@@ -110,6 +110,8 @@ The core aggregate.
 | `AckDueAt` | `datetimeoffset` | set at creation/severity change from `SlaPolicy` |
 | `ResolveDueAt` | `datetimeoffset` | set at creation/severity change from `SlaPolicy` |
 | `IsSlaBreached` | `bit` | not null, default `0`, set by `SlaMonitor` |
+| `SlaWarnAt` | `datetimeoffset` | nullable — when the resolve window reaches the policy's `EscalateAtPercent`; stored with the due times (so a policy edit never moves it) and recomputed on a severity change. Internal: not in the API |
+| `SlaWarnedAt` | `datetimeoffset` | nullable — set when `SlaMonitor` raised the warning (dedup marker, no history row); cleared on a severity change because the SLA clock restarts. Internal: not in the API |
 | `AcknowledgedAt` | `datetimeoffset` | nullable |
 | `ResolvedAt` | `datetimeoffset` | nullable |
 | `ClosedAt` | `datetimeoffset` | nullable |
@@ -125,6 +127,7 @@ The core aggregate.
 - Full-text index on `Title`, `Description` (catalog `ftIncidentHub`, key index `PK_Incidents`) — search and duplicate hints; needs SQL Server with Full-Text Search (`docker/mssql-fts` locally)
 - Unique filtered index on `Fingerprint` `WHERE Status <> 'Closed'` — prevents duplicate open incidents
 - Unique on `Number`
+- `IX_Incidents_SlaCandidates` on `(ResolveDueAt)` `INCLUDE (SlaWarnAt, SlaWarnedAt)` `WHERE IsSlaBreached = 0 AND Status <> 'Resolved' AND Status <> 'Closed'` — the SLA monitor's candidate query
 
 ---
 
@@ -238,7 +241,7 @@ Transactional outbox — written in the same `SaveChangesAsync` as the triggerin
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | `uniqueidentifier` | PK |
-| `Type` | `nvarchar(50)` | e.g. `IncidentReported`, `SlaBreached` |
+| `Type` | `nvarchar(50)` | e.g. `IncidentReported`, `SlaWarning`, `SlaBreached` (the event's class name) |
 | `Payload` | `nvarchar(max)` | JSON |
 | `OccurredAt` | `datetimeoffset` | not null |
 | `ProcessedAt` | `datetimeoffset` | nullable — null = undispatched |
