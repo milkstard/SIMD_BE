@@ -348,6 +348,32 @@ namespace IncidentHub.Infrastructure.Persistence.Migrations
                     b.ToTable("IncidentHistory", (string)null);
                 });
 
+            modelBuilder.Entity("IncidentHub.Domain.Incidents.Sla.SlaPolicySetting", b =>
+                {
+                    b.Property<string>("Severity")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("AckMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("EscalateAtPercent")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ResolveMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.HasKey("Severity");
+
+                    b.ToTable("SlaPolicies", (string)null);
+                });
+
             modelBuilder.Entity("IncidentHub.Domain.Teams.Team", b =>
                 {
                     b.Property<Guid>("Id")

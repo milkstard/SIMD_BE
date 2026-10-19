@@ -1,5 +1,6 @@
 using IncidentHub.Domain.Apps;
 using IncidentHub.Domain.Incidents;
+using IncidentHub.Domain.Incidents.Sla;
 using IncidentHub.Domain.Teams;
 using IncidentHub.Domain.Users;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,8 @@ public interface IAppDbContext
     DbSet<Comment> Comments { get; }
 
     DbSet<Attachment> Attachments { get; }
+
+    DbSet<SlaPolicySetting> SlaPolicies { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

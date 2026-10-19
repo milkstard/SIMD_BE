@@ -7,6 +7,47 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/12_01_sla-policies-table-and-admin-api.md` (BE-12, part 1 of 4) |
+| State | Done <!-- Planned - In progress - Blocked - Done --> |
+| Started | 2026-10-19 |
+| Last updated | 2026-10-19 |
+| Branch / commit | main / `8be423f` (12_01 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (12_01 section 9), `DATABASE.md` (`RowVersion`), `API-CONTRACT.md` (`/sla-policies`), deferred/completed items, deferred/completed items
+- [x] Domain: `SlaPolicySetting` (+ unit tests)
+- [x] Application: `Sla/` list, get, update (validator, handler), `SlaPolicyDto`, `SlaPolicyIds`; `IAppDbContext.SlaPolicies`
+- [x] Infrastructure: configuration, migration `AddSlaPolicies` (seed), `DbSlaPolicyProvider` replaces `ConfiguredSlaPolicyProvider`
+- [x] Api: `Policies.CanManageSlaPolicies`, `SlaPoliciesController`, `contracts/swagger.json` regenerated
+- [x] Tests written (unit + integration)
+- [x] Build, format, unit tests
+- [x] Full integration suite run with Docker
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` run.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 475, Application 306, Worker 4, Api.UnitTests 156 passed, 0 failed (new: `SlaPolicySettingTests`, `SlaPolicyIdsTests`, `UpdateSlaPolicyValidatorTests`).
+- `contracts/swagger.json` regenerated: +327 lines, additive (new paths and schemas only); `OpenApiDocumentTests` 5/5.
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 600/600 passed (new: `SlaPoliciesEndpointsTests`, `UpdateSlaPolicyHandlerTests`, `DbSlaPolicyProviderTests`). The first attempt waited for Docker to start.
+
+### Decisions (2026-10-19)
+Entity lives in Domain (`SlaPolicySetting`) instead of Infrastructure so Application handlers can use `IAppDbContext`; open questions 1-5 accepted as proposed (spec 12_01 section 9).
+
+### Blockers / open questions
+None.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1541/1541 passed (integration 600), 0 proposed tests required, 5 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 4 Low |
+
+Verdict: **Approved**. Open non-blocking items: SEC-1 the policy update logs no actor or old/new values (inject `ICurrentUser`, or add an audit table); SEC-2 the unvalidated `{id}` is echoed in the 404 detail (use a fixed message); code review L1 a missing row makes the list return fewer than 4 items and `PUT` answer 404 (document it, or create the row from `Sla:Defaults` on update), L2 a row edited outside the API (e.g. `ack = 0`) makes `ToPolicy()` throw (add CHECK constraints or catch and fall back), L3 `SlaPolicySetting.Update` throws `ArgumentOutOfRangeException`, not `DomainException` (unreachable through the API), L4 the endpoint tests mutate shared rows and restore them in `finally`; QA Lows: no test of the concurrent-write 409 race, 401 asserted on one route only, spec header still says Draft.
+
+## Previous implementation (11_03)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/11_03_current-user-and-openapi.md` (BE-11, part 3 of 3) |
 | State | Done <!-- Planned - In progress - Blocked - Done --> |
 | Started | 2026-10-14 |
@@ -347,6 +388,10 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-19 - 12_01 - Reviewed - Approved - QA 1541/1541 (5 Low), security 0 Critical/High/Medium (2 Low), code review 0 Critical/High/Medium (4 Low).
+- 2026-10-19 - 12_01 - Done - `SlaPolicies` table, `DbSlaPolicyProvider`, `GET/PUT /sla-policies`; 600 integration + 941 unit tests green with Docker, format clean; review pending.
+- 2026-10-19 - 12_01 - Blocked - Code, docs, migration and tests complete; build, format and unit tests green; integration run waits for Docker.
+- 2026-10-19 - 12_01 - In progress - Started; `SlaPolicies` table, `DbSlaPolicyProvider` and `/sla-policies` admin API; pulls in two deferred items (table, provider).
 - 2026-10-14 - 11_03 - Fixed - Review code-review M1 (`GET /me` note moved below the endpoint table in `API-CONTRACT.md`); `dotnet format --verify-no-changes` clean, OpenAPI tests 5/5, opt-in Performance tests 4/4 with Docker.
 - 2026-10-14 - 11_03 - Reviewed - Approved - QA 1486/1486 (1 Medium, 7 Low), security 0 Critical/High/Medium (1 Low), code review 1 Medium / 5 Low.
 - 2026-10-14 - 11_03 - Done - `GET /me`, sorted and deterministic OpenAPI, `range` enum documented; 572 integration + 914 unit tests green with Docker, format clean; review pending.

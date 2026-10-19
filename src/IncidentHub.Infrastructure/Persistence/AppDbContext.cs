@@ -3,6 +3,7 @@ using IncidentHub.Application.Common.Exceptions;
 using IncidentHub.Domain.Apps;
 using IncidentHub.Domain.Common;
 using IncidentHub.Domain.Incidents;
+using IncidentHub.Domain.Incidents.Sla;
 using IncidentHub.Domain.Teams;
 using IncidentHub.Domain.Users;
 using IncidentHub.Infrastructure.Outbox;
@@ -32,6 +33,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, PostCom
     public DbSet<Comment> Comments => Set<Comment>();
 
     public DbSet<Attachment> Attachments => Set<Attachment>();
+
+    public DbSet<SlaPolicySetting> SlaPolicies => Set<SlaPolicySetting>();
 
     /// <summary>Written only by this context (see <see cref="StageOutbox"/>); deliberately not on <see cref="IAppDbContext"/>.</summary>
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();

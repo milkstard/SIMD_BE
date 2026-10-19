@@ -369,9 +369,12 @@ interface Team {
 interface CreateTeamRequest { name: string; email: string; teamsChannelUrl?: string | null; }   // name <= 200, email <= 320, url <= 500
 interface UpdateTeamRequest { name: string; email: string; teamsChannelUrl?: string | null; }   // PUT = full replace
 interface SlaPolicy {
-  id: string; severity: Severity;
+  id: string;                       // the severity name, e.g. "Critical"
+  severity: Severity;
   ackMinutes: number; resolveMinutes: number; escalateAtPercent: number;  // e.g. 80
+  rowVersion: string;               // base64; also returned as the ETag header
 }
+interface UpdateSlaPolicyRequest { ackMinutes: number; resolveMinutes: number; escalateAtPercent: number; }   // PUT = full replace of one severity
 ```
 
 | Method | Path |
@@ -380,7 +383,8 @@ interface SlaPolicy {
 | GET / PUT | `/applications/{id}` (see below) |
 | GET / POST | `/teams` (see below) |
 | GET / PUT | `/teams/{id}` (see below) |
-| GET / PUT | `/sla-policies`, `/sla-policies/{id}` |
+| GET | `/sla-policies`, `/sla-policies/{id}` (see below) |
+| PUT | `/sla-policies/{id}` (see below) |
 
 Teams (all verbs are **Admin only**):
 
@@ -393,6 +397,16 @@ Teams (all verbs are **Admin only**):
 
 Validation failures return `422` with camelCase keys, e.g. `{ "email": ["..."], "teamsChannelUrl": ["..."] }`.
 Team names are not unique.
+
+SLA policies (all verbs are **Admin only**; one policy per severity, seeded with the built-in defaults):
+
+| Method | Path | Body | Success | Notes |
+|---|---|---|---|---|
+| GET | `/sla-policies` | — | `200` `SlaPolicy[]` | Always four items, ordered Critical, High, Medium, Low |
+| GET | `/sla-policies/{id}` | — | `200` `SlaPolicy` + `ETag` | `id` is the severity name (case-insensitive); `404` when unknown |
+| PUT | `/sla-policies/{id}` | `UpdateSlaPolicyRequest` | `200` `SlaPolicy` + new `ETag` | `If-Match` required (`428` missing, `400` malformed, `409` stale); `404` unknown id; `422` unless `ackMinutes > 0`, `ackMinutes <= resolveMinutes <= 525600` and `escalateAtPercent` is 1-99 (camelCase keys) |
+
+A change applies only to incidents reported or re-severitied afterwards; the `ackDueAt`/`resolveDueAt` of existing incidents are never rewritten.
 
 Applications (`rowVersion` is also returned as the `ETag` header):
 

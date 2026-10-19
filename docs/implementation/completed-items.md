@@ -27,3 +27,5 @@ Items moved here from [`deferred-items.md`](deferred-items.md) once an implement
 | `AppStatusCalculator` | 04_01 | 11_01 | _pending commit_ | Pure Domain calculator; `Since` derives from the earliest causing incident, no schema change |
 | `AppStatusChanged` broadcast | 09_02 | 11_01 | _pending commit_ | Planned by `IncidentBroadcaster` after a post-commit refresh of the cached status; sent to `dashboard:{teamId}` only when the status changed |
 | `DashboardChanged` payload: production `IDashboardSummaryReader` | 09_02 | 11_02 | _pending commit_ | `DashboardSummaryReader` recomputes the team's `7d` summary after each commit and overwrites its 5 s cache entry; the Worker keeps the null reader |
+| `SlaPolicies` table | 04_02 | 12_01 | _pending commit_ | Migration `AddSlaPolicies` seeds the four defaults; Domain entity `SlaPolicySetting` with `RowVersion` |
+| Replace config-backed `ISlaPolicyProvider` (`Sla:Defaults`) with the `SlaPolicies` table | 05_01 | 12_01 | _pending commit_ | `DbSlaPolicyProvider` reads the table; a missing row falls back to `Sla:Defaults` with a warning |

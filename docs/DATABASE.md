@@ -210,6 +210,9 @@ Phase 2 (`BE-12`). One row per severity.
 | `AckMinutes` | `int` | not null |
 | `ResolveMinutes` | `int` | not null |
 | `EscalateAtPercent` | `int` | not null — e.g. `80` |
+| `RowVersion` | `rowversion` | concurrency token — `PUT /sla-policies/{id}` requires `If-Match` |
+
+Seeded by migration `AddSlaPolicies` with the four built-in defaults (Critical 15/240/80, High 60/480/80, Medium 240/4320/80, Low 480/7200/80). `Severity` is stored as its name. A change applies only to incidents created or re-severitied afterwards.
 
 ---
 
