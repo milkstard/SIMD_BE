@@ -7,6 +7,45 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/13_02_channel-routing-and-preferences.md` (BE-13, part 2 of 2) |
+| State | Done <!-- Planned - In progress - Blocked - Done --> |
+| Started | 2026-10-21 |
+| Last updated | 2026-10-21 |
+| Branch / commit | main / `8eec45c` (13_02 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (13_02 section 9), `DATABASE.md`, `API-CONTRACT.md` (text), `CLAUDE.md`, deferred/completed items
+- [x] Application: `INotificationSender.IsLive`, `NotificationPrefsParser`, `ChatDelivery`, `NotificationRouter`, reader (`NotificationPrefs`, `GetTeamChannelUrlAsync`), the five handlers use the router
+- [x] Infrastructure: `IsLive` on the four senders, DI for `ChatDelivery` and `NotificationRouter`
+- [x] Tests written (unit: parser, router, handlers, layering, DI; integration: `Outbox/ChatDispatchTests`)
+- [x] Build, unit tests
+- [x] Format, full integration suite run with Docker
+
+### Decisions (2026-10-21)
+OQ 1-5 accepted as proposed (spec 13_02 section 9). Added: a chat channel without a live sender (chat disabled) falls back to email for users.
+
+### Blockers / open questions
+None. Not automated: a manual smoke test with a real Teams and a real Slack webhook. Review pending (`/review-spec`).
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format --verify-no-changes` clean.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 502, Application 388, Worker 7, Api.UnitTests 238 passed, 0 failed (new: `NotificationPrefsParserTests`, `NotificationRouterTests`, a chat-preference case per handler, layering and DI cases).
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 642/642 passed in 3 m 14 s (new `Outbox/ChatDispatchTests` 15, recording Teams/Slack senders with Mailpit; `EmailDispatchTests` unchanged and green).
+- `contracts/swagger.json` unchanged (no endpoint or DTO change); not regenerated.
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1777/1777 passed (integration 642), 0 proposed tests required, 3 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 4 Low |
+
+Verdict: **Approved**. Open non-blocking items: SEC-1 the host allow-list runs only at send time, so a non-allow-listed https URL is classified as Teams and each event repeats a permanent failure and a Warning before the email fallback (validate the host when the team is saved, or expose `IsAllowed` on `ChatDelivery`); SEC-2 / QA Low-1 the router logs `exception.Message` of `NonRetryableOutboxException` (safe only while the senders keep the URL out of it; log the exception type instead and add a router test); code review L1 a transient chat outage on the user path parks the message after `MaxAttempts` with no email (per spec, document it in section 9); L2 the `EmailDelivery` summary still says "three handlers"; L3 `SendToUserAsync` takes the user id apart from `EmailRecipient`; L4 the `SlaWarningEmailHandler` summary line is long; QA Low-2 the spec header still says Draft and its acceptance boxes are unticked, Low-3 the team-path duplicate mail (OQ 4) is pinned by no test. Not performed: a manual smoke test with a real Teams and a real Slack webhook, repeated full-suite runs.
+
+## Previous implementation (13_01)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/13_01_chat-senders-and-resilience.md` (BE-13, part 1 of 2) |
 | State | Done <!-- Planned - In progress - Blocked - Done --> |
 | Started | 2026-10-21 |
@@ -551,6 +590,9 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-21 - 13_02 - Reviewed - Approved - QA 1777/1777 (3 Low), security 0 Critical/High/Medium (2 Low), code review 0 Critical/High/Medium (4 Low).
+- 2026-10-21 - 13_02 - Done - Channel routing by `User.NotificationPrefs` for the five existing triggers (`NotificationRouter`, `ChatDelivery`, `IsLive` fallback); 642 integration + 1135 unit tests green with Docker, format clean; review pending.
+- 2026-10-21 - 13_02 - In progress - Started; Teams/Slack routing by `User.NotificationPrefs` for the five existing triggers; pulls in two deferred items (prefs, SLA chat delivery).
 - 2026-10-21 - 13_01 - Reviewed - Approved - QA 1712/1712 (4 Low), security 0 Critical/High/Medium (2 Low), code review 0 Critical/High/Medium (4 Low).
 - 2026-10-21 - 13_01 - Done - Teams and Slack webhook senders, `teams`/`slack` Polly pipelines, host allow-list, logging fallback; 627 integration + 1085 unit tests green with Docker, format clean; review pending.
 - 2026-10-21 - 13_01 - Blocked - Code, docs and tests complete; build, format and 1085 unit tests green; integration run waited for Docker.

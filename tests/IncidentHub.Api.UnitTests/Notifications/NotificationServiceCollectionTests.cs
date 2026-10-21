@@ -129,4 +129,28 @@ public sealed class NotificationServiceCollectionTests
 
         act.Should().Throw<OptionsValidationException>().Which.Message.Should().Contain("Notifications:Chat:AllowedHosts");
     }
+
+    [Theory]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    public void Resolve_ChatSenders_AreLiveOnlyWhenChatIsEnabled(string enabled, bool live)
+    {
+        using var provider = Build(new() { ["Notifications:Chat:Enabled"] = enabled });
+
+        ChatSender(provider, NotificationChannel.Teams).IsLive.Should().Be(live);
+        ChatSender(provider, NotificationChannel.Slack).IsLive.Should().Be(live);
+    }
+
+    [Fact]
+    public void Resolve_Router_IsRegisteredScoped()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped(_ => NSubstitute.Substitute.For<IAppDbContext>());
+        services.AddNotificationSenders(new ConfigurationBuilder().Build());
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetRequiredService<NotificationRouter>().Should().NotBeNull();
+    }
 }

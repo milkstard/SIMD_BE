@@ -6,10 +6,10 @@ using Microsoft.Extensions.Logging;
 
 namespace IncidentHub.Application.Notifications.Email;
 
-/// <summary>A move to <c>Resolved</c> is mailed to the reporter, unless the reporter made it. Other transitions send nothing.</summary>
+/// <summary>A move to <c>Resolved</c> is sent to the reporter, unless the reporter made it. Other transitions send nothing.</summary>
 public sealed class IncidentResolvedEmailHandler(
     IIncidentEmailReader reader,
-    EmailDelivery delivery,
+    NotificationRouter router,
     ILogger<IncidentResolvedEmailHandler> logger) : IOutboxMessageHandler
 {
     public string EventType => nameof(IncidentTransitioned);
@@ -43,6 +43,12 @@ public sealed class IncidentResolvedEmailHandler(
             return;
         }
 
-        await delivery.SendAsync(outboxMessageId, reporter, EmailContentBuilder.Resolved(incident, transitioned.Note), cancellationToken);
+        await router.SendToUserAsync(
+            outboxMessageId,
+            incident.ReporterId,
+            reporter,
+            incident.OwningTeamId,
+            EmailContentBuilder.Resolved(incident, transitioned.Note),
+            cancellationToken);
     }
 }

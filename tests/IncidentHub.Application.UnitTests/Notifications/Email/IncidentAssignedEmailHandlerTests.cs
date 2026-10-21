@@ -18,7 +18,7 @@ public sealed class IncidentAssignedEmailHandlerTests
 
     public IncidentAssignedEmailHandlerTests()
     {
-        _handler = new IncidentAssignedEmailHandler(_kit.Reader, _kit.Delivery, NullLogger<IncidentAssignedEmailHandler>.Instance);
+        _handler = new IncidentAssignedEmailHandler(_kit.Reader, _kit.Router, NullLogger<IncidentAssignedEmailHandler>.Instance);
         _kit.Reader.GetIncidentAsync(_incidentId, Arg.Any<CancellationToken>()).Returns(EmailTestKit.Facts(assigneeId: _assignee));
         _kit.Reader.GetUserAsync(_assignee, Arg.Any<CancellationToken>()).Returns(new EmailRecipient("ana@example.com", "Ana"));
     }
@@ -109,5 +109,18 @@ public sealed class IncidentAssignedEmailHandlerTests
         var act = () => _handler.HandleAsync(Event(_assignee, null), Guid.NewGuid(), CancellationToken.None);
 
         await act.Should().ThrowAsync<NotificationDeliveryException>();
+    }
+
+    [Fact]
+    public async Task Handle_TeamsPreference_UsesChatLeg()
+    {
+        _kit.Reader.GetUserAsync(_assignee, Arg.Any<CancellationToken>())
+            .Returns(new EmailRecipient("ana@example.com", "Ana", EmailTestKit.TeamsPrefs));
+        _kit.Reader.GetTeamChannelUrlAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(EmailTestKit.TeamsUrl);
+
+        await _handler.HandleAsync(Event(_assignee, null), Guid.NewGuid(), CancellationToken.None);
+
+        _kit.SentOn(_kit.TeamsSender).Should().ContainSingle();
+        _kit.Sent().Should().BeEmpty();
     }
 }

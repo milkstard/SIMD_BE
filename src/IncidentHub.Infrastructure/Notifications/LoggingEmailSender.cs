@@ -9,6 +9,8 @@ internal sealed class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : I
 {
     public NotificationChannel Channel => NotificationChannel.Email;
 
+    public bool IsLive => false;
+
     public Task SendAsync(Notification notification, CancellationToken cancellationToken)
     {
         var at = notification.ToAddress.LastIndexOf('@');

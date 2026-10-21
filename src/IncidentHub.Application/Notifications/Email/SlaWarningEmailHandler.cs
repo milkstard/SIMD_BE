@@ -7,12 +7,12 @@ using Microsoft.Extensions.Logging;
 namespace IncidentHub.Application.Notifications.Email;
 
 /// <summary>
-/// An SLA warning is mailed to the incident's current assignee. It sends nothing when the incident is gone or no longer open, when the
+/// An SLA warning is sent to the incident's current assignee (email, or the team channel when they prefer Teams or Slack). It sends nothing when the incident is gone or no longer open, when the
 /// warning is not the incident's current one (a severity change restarted the SLA clock) or when nobody is assigned.
 /// </summary>
 public sealed class SlaWarningEmailHandler(
     IIncidentEmailReader reader,
-    EmailDelivery delivery,
+    NotificationRouter router,
     ILogger<SlaWarningEmailHandler> logger) : IOutboxMessageHandler
 {
     public string EventType => nameof(SlaWarning);
@@ -53,6 +53,12 @@ public sealed class SlaWarningEmailHandler(
             return;
         }
 
-        await delivery.SendAsync(outboxMessageId, assignee, EmailContentBuilder.SlaWarning(incident), cancellationToken);
+        await router.SendToUserAsync(
+            outboxMessageId,
+            assigneeId,
+            assignee,
+            incident.OwningTeamId,
+            EmailContentBuilder.SlaWarning(incident),
+            cancellationToken);
     }
 }

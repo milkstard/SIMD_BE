@@ -16,7 +16,7 @@ public sealed class SlaWarningEmailHandlerTests
 
     public SlaWarningEmailHandlerTests()
     {
-        _handler = new SlaWarningEmailHandler(_kit.Reader, _kit.Delivery, NullLogger<SlaWarningEmailHandler>.Instance);
+        _handler = new SlaWarningEmailHandler(_kit.Reader, _kit.Router, NullLogger<SlaWarningEmailHandler>.Instance);
         GivenIncident(EmailTestKit.Facts(status: IncidentStatus.InProgress, assigneeId: _assignee, slaWarnedAt: EmailTestKit.At));
         _kit.Reader.GetUserAsync(_assignee, Arg.Any<CancellationToken>()).Returns(new EmailRecipient("ana@example.com", "Ana"));
     }
@@ -101,6 +101,19 @@ public sealed class SlaWarningEmailHandlerTests
 
         await _handler.HandleAsync(Event(), Guid.NewGuid(), CancellationToken.None);
 
+        _kit.Sent().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_TeamsPreference_UsesChatLeg()
+    {
+        _kit.Reader.GetUserAsync(_assignee, Arg.Any<CancellationToken>())
+            .Returns(new EmailRecipient("ana@example.com", "Ana", EmailTestKit.TeamsPrefs));
+        _kit.Reader.GetTeamChannelUrlAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(EmailTestKit.TeamsUrl);
+
+        await _handler.HandleAsync(Event(), Guid.NewGuid(), CancellationToken.None);
+
+        _kit.SentOn(_kit.TeamsSender).Should().ContainSingle();
         _kit.Sent().Should().BeEmpty();
     }
 }

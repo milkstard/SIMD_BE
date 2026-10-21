@@ -9,6 +9,8 @@ internal sealed class LoggingChatSender(NotificationChannel channel, ILogger<Log
 {
     public NotificationChannel Channel => channel;
 
+    public bool IsLive => false;
+
     public Task SendAsync(Notification notification, CancellationToken cancellationToken)
     {
         var host = Uri.TryCreate(notification.ToAddress.Trim(), UriKind.Absolute, out var uri) ? uri.Host : "unknown";

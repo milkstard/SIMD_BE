@@ -19,7 +19,7 @@ public sealed class IncidentReportedEmailHandlerTests
 
     public IncidentReportedEmailHandlerTests()
     {
-        _handler = new IncidentReportedEmailHandler(_kit.Reader, _kit.Delivery, NullLogger<IncidentReportedEmailHandler>.Instance);
+        _handler = new IncidentReportedEmailHandler(_kit.Reader, _kit.Router, NullLogger<IncidentReportedEmailHandler>.Instance);
     }
 
     [Fact]
@@ -84,4 +84,18 @@ public sealed class IncidentReportedEmailHandlerTests
 
     [Fact]
     public void EventType_IsIncidentReported() => _handler.EventType.Should().Be("IncidentReported");
+
+    [Fact]
+    public async Task Handle_TeamWithWebhook_MailsAndPostsToChannel()
+    {
+        var facts = EmailTestKit.Facts();
+        _kit.Reader.GetIncidentAsync(_event.IncidentId, Arg.Any<CancellationToken>()).Returns(facts);
+        _kit.Reader.GetTeamAsync(facts.OwningTeamId, Arg.Any<CancellationToken>()).Returns(new EmailRecipient("team@example.com", "Payments"));
+        _kit.Reader.GetTeamChannelUrlAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(EmailTestKit.TeamsUrl);
+
+        await _handler.HandleAsync(_event, Guid.NewGuid(), CancellationToken.None);
+
+        _kit.Sent().Should().ContainSingle().Which.ToAddress.Should().Be("team@example.com");
+        _kit.SentOn(_kit.TeamsSender).Should().ContainSingle().Which.ToAddress.Should().Be(EmailTestKit.TeamsUrl);
+    }
 }

@@ -53,12 +53,18 @@ public sealed class IncidentEmailReader(IAppDbContext db) : IIncidentEmailReader
     public Task<EmailRecipient?> GetUserAsync(Guid userId, CancellationToken cancellationToken) =>
         db.Users.AsNoTracking()
             .Where(u => u.Id == userId)
-            .Select(u => new EmailRecipient(u.Email, u.DisplayName))
+            .Select(u => new EmailRecipient(u.Email, u.DisplayName, u.NotificationPrefs))
             .FirstOrDefaultAsync(cancellationToken);
 
     public Task<EmailRecipient?> GetTeamAsync(Guid teamId, CancellationToken cancellationToken) =>
         db.Teams.AsNoTracking()
             .Where(t => t.Id == teamId)
-            .Select(t => new EmailRecipient(t.Email, t.Name))
+            .Select(t => new EmailRecipient(t.Email, t.Name, null))
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<string?> GetTeamChannelUrlAsync(Guid teamId, CancellationToken cancellationToken) =>
+        db.Teams.AsNoTracking()
+            .Where(t => t.Id == teamId)
+            .Select(t => t.TeamsChannelUrl)
             .FirstOrDefaultAsync(cancellationToken);
 }

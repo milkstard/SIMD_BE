@@ -5,10 +5,10 @@ using Microsoft.Extensions.Logging;
 
 namespace IncidentHub.Application.Notifications.Email;
 
-/// <summary>A reported incident is mailed to the owning team's address.</summary>
+/// <summary>A reported incident is mailed to the owning team's address and, when the team has a webhook, posted to its channel.</summary>
 public sealed class IncidentReportedEmailHandler(
     IIncidentEmailReader reader,
-    EmailDelivery delivery,
+    NotificationRouter router,
     ILogger<IncidentReportedEmailHandler> logger) : IOutboxMessageHandler
 {
     public string EventType => nameof(IncidentReported);
@@ -37,6 +37,6 @@ public sealed class IncidentReportedEmailHandler(
             return;
         }
 
-        await delivery.SendAsync(outboxMessageId, team, EmailContentBuilder.Reported(incident), cancellationToken);
+        await router.SendToTeamAsync(outboxMessageId, incident.OwningTeamId, team, EmailContentBuilder.Reported(incident), cancellationToken);
     }
 }

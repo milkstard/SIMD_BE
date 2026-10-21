@@ -6,11 +6,12 @@ using Microsoft.Extensions.Logging;
 namespace IncidentHub.Application.Notifications.Email;
 
 /// <summary>
-/// A new assignee is mailed once. Re-assigning the same user, unassigning, a team-only change and self-assignment send nothing.
+/// A new assignee is notified once (by email, or on the team channel when they prefer Teams or Slack). Re-assigning the same user,
+/// unassigning, a team-only change and self-assignment send nothing.
 /// </summary>
 public sealed class IncidentAssignedEmailHandler(
     IIncidentEmailReader reader,
-    EmailDelivery delivery,
+    NotificationRouter router,
     ILogger<IncidentAssignedEmailHandler> logger) : IOutboxMessageHandler
 {
     public string EventType => nameof(IncidentAssigned);
@@ -51,6 +52,12 @@ public sealed class IncidentAssignedEmailHandler(
             return;
         }
 
-        await delivery.SendAsync(outboxMessageId, assignee, EmailContentBuilder.Assigned(incident), cancellationToken);
+        await router.SendToUserAsync(
+            outboxMessageId,
+            assigneeId,
+            assignee,
+            incident.OwningTeamId,
+            EmailContentBuilder.Assigned(incident),
+            cancellationToken);
     }
 }

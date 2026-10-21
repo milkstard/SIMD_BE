@@ -1,6 +1,7 @@
 using System.Reflection;
 using FluentAssertions;
 using IncidentHub.Application.Abstractions;
+using IncidentHub.Application.Notifications;
 using IncidentHub.Application.Notifications.Email;
 using IncidentHub.Application.Outbox;
 using IncidentHub.Domain.Incidents.Events;
@@ -11,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace IncidentHub.Api.UnitTests.Architecture;
 
-/// <summary>Request handlers, controllers and hubs never send mail: only outbox handlers (through <see cref="EmailDelivery"/>) do.</summary>
+/// <summary>Request handlers, controllers and hubs never send mail: only outbox handlers (through <see cref="EmailDelivery"/> and <see cref="ChatDelivery"/>) do.</summary>
 public sealed class NotificationLayeringTests
 {
     private static readonly Assembly[] Assemblies =
@@ -28,7 +29,8 @@ public sealed class NotificationLayeringTests
             .SelectMany(a => a.GetTypes())
             .Where(t => t.IsClass
                 && !typeof(IOutboxMessageHandler).IsAssignableFrom(t)
-                && t != typeof(EmailDelivery))
+                && t != typeof(EmailDelivery)
+                && t != typeof(ChatDelivery))
             .Where(t => t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                 .SelectMany(c => c.GetParameters())
                 .Any(p => IsSender(p.ParameterType)))
@@ -55,6 +57,32 @@ public sealed class NotificationLayeringTests
     }
 
     [Fact]
+    public void Router_DoesNotDependOnSendersDirectly()
+    {
+        typeof(NotificationRouter).GetConstructors()
+            .SelectMany(c => c.GetParameters())
+            .Should().NotContain(p => IsSender(p.ParameterType), "the router goes through EmailDelivery and ChatDelivery");
+    }
+
+    [Fact]
+    public void Api_DoesNotRegisterChatSenders()
+    {
+        var apiAssembly = typeof(IncidentHub.Api.Auth.Policies).Assembly;
+        var offenders = apiAssembly.GetTypes()
+            .Where(t => t.IsClass
+                && (typeof(INotificationSender).IsAssignableFrom(t)
+                    || t == typeof(ChatDelivery)
+                    || t == typeof(NotificationRouter)
+                    || t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                        .SelectMany(c => c.GetParameters())
+                        .Any(p => p.ParameterType == typeof(ChatDelivery) || p.ParameterType == typeof(NotificationRouter))))
+            .Select(t => t.FullName)
+            .ToList();
+
+        offenders.Should().BeEmpty("only the Worker host registers senders; the API sends nothing");
+    }
+
+    [Fact]
     public void AddNotificationSenders_RegistersTheEmailHandlersKeyedByEventType()
     {
         var services = new ServiceCollection();
@@ -77,6 +105,8 @@ public sealed class NotificationLayeringTests
             handler.Should().BeOfType(type);
             handler.EventType.Should().Be(key);
         }
+
+        scope.ServiceProvider.GetRequiredService<NotificationRouter>().Should().NotBeNull();
     }
 
     private static bool IsSender(Type type) =>

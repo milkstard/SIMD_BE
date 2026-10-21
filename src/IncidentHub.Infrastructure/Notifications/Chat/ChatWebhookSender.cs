@@ -34,6 +34,8 @@ internal abstract class ChatWebhookSender(
 
     public abstract NotificationChannel Channel { get; }
 
+    public bool IsLive => true;
+
     /// <summary>The named <see cref="HttpClient"/> of this channel.</summary>
     protected abstract string ClientName { get; }
 

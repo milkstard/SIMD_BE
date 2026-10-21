@@ -52,7 +52,7 @@ Owning teams for applications; notification routing target.
 | `Id` | `uniqueidentifier` | PK |
 | `Name` | `nvarchar(200)` | not null |
 | `Email` | `nvarchar(320)` | not null |
-| `TeamsChannelUrl` | `nvarchar(500)` | nullable — MS Teams/Slack webhook |
+| `TeamsChannelUrl` | `nvarchar(500)` | nullable — absolute https URL of a Microsoft Teams (Workflows) **or** Slack incoming webhook; the host tells them apart. Receives the team's incident posts and the posts of users who prefer Teams/Slack |
 | `RowVersion` | `rowversion` | concurrency token |
 
 ---
@@ -79,7 +79,7 @@ Local projection of Entra ID identities — never the source of truth for auth, 
 | `EntraObjectId` | `nvarchar(64)` | not null, unique — Entra Object ID |
 | `DisplayName` | `nvarchar(200)` | not null |
 | `Email` | `nvarchar(320)` | not null |
-| `NotificationPrefs` | `nvarchar(max)` | not null, JSON, default `{"channel":"Email"}` |
+| `NotificationPrefs` | `nvarchar(max)` | not null, JSON, default `{"channel":"Email"}`. `channel` is `Email` \| `Teams` \| `Slack` (case-insensitive); an unreadable value is treated as `Email` with a warning. A `Teams`/`Slack` user gets the post in the owning team's channel instead of the email, with email as the fallback. No endpoint sets it yet |
 | `LastSeenAt` | `datetimeoffset` | not null — updated on each sign-in |
 
 **Indexes:** unique on `EntraObjectId`.

@@ -63,6 +63,8 @@ public static class NotificationServiceCollectionExtensions
         // The email triggers. Keyed by the event type they handle, so the dispatcher builds only the handlers a message needs.
         services.TryAddScoped<IIncidentEmailReader, IncidentEmailReader>();
         services.TryAddScoped<EmailDelivery>();
+        services.TryAddScoped<ChatDelivery>();
+        services.TryAddScoped<NotificationRouter>();
         services.AddKeyedScoped<IOutboxMessageHandler, IncidentReportedEmailHandler>(nameof(IncidentReported));
         services.AddKeyedScoped<IOutboxMessageHandler, IncidentAssignedEmailHandler>(nameof(IncidentAssigned));
         services.AddKeyedScoped<IOutboxMessageHandler, IncidentResolvedEmailHandler>(nameof(IncidentTransitioned));

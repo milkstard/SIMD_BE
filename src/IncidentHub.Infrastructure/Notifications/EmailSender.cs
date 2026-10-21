@@ -33,6 +33,8 @@ internal sealed class EmailSender(
 
     public NotificationChannel Channel => NotificationChannel.Email;
 
+    public bool IsLive => true;
+
     public async Task SendAsync(Notification notification, CancellationToken cancellationToken)
     {
         using var activity = InfrastructureTelemetry.Source.StartActivity("notification.send");

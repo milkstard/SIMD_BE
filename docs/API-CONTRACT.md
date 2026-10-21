@@ -363,7 +363,7 @@ interface UpdateApplicationRequest {          // PUT = full replace, If-Match re
 }
 interface Team {
   id: string; name: string; email: string;
-  teamsChannelUrl: string | null;   // absolute https URL
+  teamsChannelUrl: string | null;   // absolute https URL of a Teams or Slack incoming webhook
   rowVersion: string;               // base64; also returned as the ETag header
 }
 interface CreateTeamRequest { name: string; email: string; teamsChannelUrl?: string | null; }   // name <= 200, email <= 320, url <= 500

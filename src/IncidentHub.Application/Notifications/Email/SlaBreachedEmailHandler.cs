@@ -6,12 +6,13 @@ using Microsoft.Extensions.Logging;
 namespace IncidentHub.Application.Notifications.Email;
 
 /// <summary>
-/// An SLA breach is mailed to the application's escalation contact. Without a contact (or when the contact has no address) it goes
-/// to the owning team's address, so a breach always reaches someone.
+/// An SLA breach is sent to the application's escalation contact (email, or the team channel when they prefer Teams or Slack).
+/// Without a contact (or when the contact has no address) it goes to the owning team's address and channel, so a breach always
+/// reaches someone.
 /// </summary>
 public sealed class SlaBreachedEmailHandler(
     IIncidentEmailReader reader,
-    EmailDelivery delivery,
+    NotificationRouter router,
     ILogger<SlaBreachedEmailHandler> logger) : IOutboxMessageHandler
 {
     public string EventType => nameof(SlaBreached);
@@ -30,7 +31,7 @@ public sealed class SlaBreachedEmailHandler(
             return;
         }
 
-        var recipient = await ResolveRecipientAsync(incident, cancellationToken);
+        var (recipient, contactId) = await ResolveRecipientAsync(incident, cancellationToken);
         if (recipient is null)
         {
             logger.LogWarning(
@@ -39,30 +40,41 @@ public sealed class SlaBreachedEmailHandler(
             return;
         }
 
-        await delivery.SendAsync(outboxMessageId, recipient, EmailContentBuilder.SlaBreached(incident), cancellationToken);
+        var content = EmailContentBuilder.SlaBreached(incident);
+        if (contactId is { } userId)
+        {
+            await router.SendToUserAsync(outboxMessageId, userId, recipient, incident.OwningTeamId, content, cancellationToken);
+        }
+        else
+        {
+            await router.SendToTeamAsync(outboxMessageId, incident.OwningTeamId, recipient, content, cancellationToken);
+        }
     }
 
-    private async Task<EmailRecipient?> ResolveRecipientAsync(IncidentEmailFacts incident, CancellationToken cancellationToken)
+    /// <summary>The recipient and, when it is the escalation contact, that user's id (null for the owning-team fallback).</summary>
+    private async Task<(EmailRecipient? Recipient, Guid? ContactId)> ResolveRecipientAsync(
+        IncidentEmailFacts incident,
+        CancellationToken cancellationToken)
     {
         if (incident.EscalationUserId is { } contactId)
         {
             var contact = await reader.GetUserAsync(contactId, cancellationToken);
             if (contact is not null && !string.IsNullOrWhiteSpace(contact.Address))
             {
-                return contact;
+                return (contact, contactId);
             }
         }
 
         var team = await reader.GetTeamAsync(incident.OwningTeamId, cancellationToken);
         if (team is null || string.IsNullOrWhiteSpace(team.Address))
         {
-            return null;
+            return (null, null);
         }
 
         logger.LogInformation(
             "SLA breach email for incident {IncidentNumber} goes to the owning team {TeamId}: no usable escalation contact",
             incident.Number,
             incident.OwningTeamId);
-        return team;
+        return (team, null);
     }
 }

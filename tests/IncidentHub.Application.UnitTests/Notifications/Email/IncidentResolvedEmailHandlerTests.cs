@@ -19,7 +19,7 @@ public sealed class IncidentResolvedEmailHandlerTests
 
     public IncidentResolvedEmailHandlerTests()
     {
-        _handler = new IncidentResolvedEmailHandler(_kit.Reader, _kit.Delivery, NullLogger<IncidentResolvedEmailHandler>.Instance);
+        _handler = new IncidentResolvedEmailHandler(_kit.Reader, _kit.Router, NullLogger<IncidentResolvedEmailHandler>.Instance);
         _kit.Reader.GetIncidentAsync(_incidentId, Arg.Any<CancellationToken>()).Returns(EmailTestKit.Facts(reporterId: _reporter));
         _kit.Reader.GetUserAsync(_reporter, Arg.Any<CancellationToken>()).Returns(new EmailRecipient("rita@example.com", "Rita"));
     }
@@ -85,4 +85,17 @@ public sealed class IncidentResolvedEmailHandlerTests
 
     [Fact]
     public void EventType_IsIncidentTransitioned() => _handler.EventType.Should().Be("IncidentTransitioned");
+
+    [Fact]
+    public async Task Handle_TeamsPreference_UsesChatLeg()
+    {
+        _kit.Reader.GetUserAsync(_reporter, Arg.Any<CancellationToken>())
+            .Returns(new EmailRecipient("rita@example.com", "Rita", EmailTestKit.SlackPrefs));
+        _kit.Reader.GetTeamChannelUrlAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(EmailTestKit.SlackUrl);
+
+        await _handler.HandleAsync(Event(IncidentStatus.Resolved), Guid.NewGuid(), CancellationToken.None);
+
+        _kit.SentOn(_kit.SlackSender).Should().ContainSingle();
+        _kit.Sent().Should().BeEmpty();
+    }
 }

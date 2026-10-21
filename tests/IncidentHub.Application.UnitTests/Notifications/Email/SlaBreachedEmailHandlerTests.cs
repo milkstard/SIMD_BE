@@ -17,7 +17,7 @@ public sealed class SlaBreachedEmailHandlerTests
 
     public SlaBreachedEmailHandlerTests()
     {
-        _handler = new SlaBreachedEmailHandler(_kit.Reader, _kit.Delivery, NullLogger<SlaBreachedEmailHandler>.Instance);
+        _handler = new SlaBreachedEmailHandler(_kit.Reader, _kit.Router, NullLogger<SlaBreachedEmailHandler>.Instance);
         GivenIncident(EmailTestKit.Facts(teamId: _team, status: IncidentStatus.InProgress, escalationUserId: _contact));
         _kit.Reader.GetUserAsync(_contact, Arg.Any<CancellationToken>()).Returns(new EmailRecipient("lead@example.com", "Lee"));
         _kit.Reader.GetTeamAsync(_team, Arg.Any<CancellationToken>()).Returns(new EmailRecipient("team@example.com", "Payments"));
@@ -93,5 +93,30 @@ public sealed class SlaBreachedEmailHandlerTests
         await _handler.HandleAsync(Event(), Guid.NewGuid(), CancellationToken.None);
 
         _kit.Sent().Should().ContainSingle().Which.ToAddress.Should().Be("lead@example.com");
+    }
+
+    [Fact]
+    public async Task Handle_TeamsPreference_UsesChatLeg()
+    {
+        _kit.Reader.GetUserAsync(_contact, Arg.Any<CancellationToken>())
+            .Returns(new EmailRecipient("lead@example.com", "Lee", EmailTestKit.TeamsPrefs));
+        _kit.Reader.GetTeamChannelUrlAsync(_team, Arg.Any<CancellationToken>()).Returns(EmailTestKit.TeamsUrl);
+
+        await _handler.HandleAsync(Event(), Guid.NewGuid(), CancellationToken.None);
+
+        _kit.SentOn(_kit.TeamsSender).Should().ContainSingle();
+        _kit.Sent().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Handle_NoContact_TeamFallbackMailsAndPosts()
+    {
+        GivenIncident(EmailTestKit.Facts(teamId: _team, status: IncidentStatus.InProgress));
+        _kit.Reader.GetTeamChannelUrlAsync(_team, Arg.Any<CancellationToken>()).Returns(EmailTestKit.SlackUrl);
+
+        await _handler.HandleAsync(Event(), Guid.NewGuid(), CancellationToken.None);
+
+        _kit.Sent().Should().ContainSingle().Which.ToAddress.Should().Be("team@example.com");
+        _kit.SentOn(_kit.SlackSender).Should().ContainSingle();
     }
 }

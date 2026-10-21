@@ -11,5 +11,11 @@ public interface INotificationSender
 {
     NotificationChannel Channel { get; }
 
+    /// <summary>
+    /// <c>false</c> for a sender that only logs (the channel is switched off). The router falls back to email instead of treating a
+    /// log line as a delivery.
+    /// </summary>
+    bool IsLive { get; }
+
     Task SendAsync(Notification notification, CancellationToken cancellationToken);
 }
