@@ -5,6 +5,7 @@ using IncidentHub.Application.Notifications.Email;
 using IncidentHub.Application.Outbox;
 using IncidentHub.Domain.Incidents.Events;
 using IncidentHub.Infrastructure.Notifications;
+using IncidentHub.Infrastructure.Notifications.Chat;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,6 +36,22 @@ public sealed class NotificationLayeringTests
             .ToList();
 
         offenders.Should().BeEmpty("only dispatcher-run handlers may depend on INotificationSender");
+    }
+
+    [Fact]
+    public void OnlyTheChatSenders_ReferenceTheHttpClient()
+    {
+        var offenders = Assemblies
+            .SelectMany(a => a.GetTypes())
+            .Where(t => t.IsClass
+                && t.Namespace != typeof(ChatOptions).Namespace)
+            .Where(t => t.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .SelectMany(c => c.GetParameters())
+                .Any(p => p.ParameterType == typeof(IHttpClientFactory) || p.ParameterType == typeof(HttpClient)))
+            .Select(t => t.FullName)
+            .ToList();
+
+        offenders.Should().BeEmpty("only the chat webhook senders make outbound webhook calls");
     }
 
     [Fact]

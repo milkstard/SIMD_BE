@@ -14,6 +14,10 @@ public static class NotificationResilience
 {
     public const string EmailPipeline = "email";
 
+    public const string TeamsPipeline = "teams";
+
+    public const string SlackPipeline = "slack";
+
     public static void Configure(ResiliencePipelineBuilder builder, NotificationResilienceOptions options)
     {
         var transient = new PredicateBuilder()

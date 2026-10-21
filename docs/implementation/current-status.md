@@ -7,6 +7,46 @@ an implementation and again **when it is done** (or blocked). It covers only imp
 
 | Field | Value |
 |---|---|
+| Spec | `docs/specs/13_01_chat-senders-and-resilience.md` (BE-13, part 1 of 2) |
+| State | Done <!-- Planned - In progress - Blocked - Done --> |
+| Started | 2026-10-21 |
+| Last updated | 2026-10-21 |
+| Branch / commit | main / `b40793d` (13_01 uncommitted) |
+
+### Progress
+- [x] Docs/tracking: spec decisions (13_01 section 9)
+- [x] Application: `NotificationChannel.Teams/Slack`, `ChatWebhook.Classify`
+- [x] Infrastructure: `ChatOptions` + validator, host allow-list, `ChatWebhookSender`, Teams and Slack senders, `LoggingChatSender`, `teams`/`slack` pipelines, DI, tracing filter for webhook URLs
+- [x] Worker: `Notifications:Chat` in `appsettings.json`
+- [x] Tests written (unit)
+- [x] Build, format, unit tests
+- [x] Full integration suite run with Docker
+
+### Decisions (2026-10-21)
+OQ 1 owning team's `TeamsChannelUrl`, host tells Teams from Slack; OQ 2 Adaptive Card only; OQ 3 at-least-once accepted; OQ 4 missing or invalid URL is permanent (no retry, no HTTP call); OQ 5 default allow-list with operator override, send-time check only; OQ 6 reuse the renderer's plain text.
+
+### Verification
+- `dotnet build`: 0 warnings, 0 errors. `dotnet format` run.
+- `dotnet test --filter "Category!=Integration&Category!=Performance"`: Domain 502, Application 343, Worker 7, Api.UnitTests 233 passed, 0 failed (new: `ChatWebhookTests`, `ChatOptionsValidatorTests`, `TeamsNotificationSenderTests`, `SlackNotificationSenderTests`, `ChatResilienceTests`, `LoggingChatSenderTests`, DI and layering cases).
+- `contracts/swagger.json` unchanged (no endpoint or DTO change); not regenerated.
+- `dotnet test tests/IncidentHub.Api.IntegrationTests --filter Category!=Performance` with Docker: 627/627 passed in 3 m 6 s (no new integration cases; DI is shared). A first attempt was stopped because Docker's engine answered `docker info` with an Internal Server Error; the rerun after Docker was restarted was green.
+
+### Blockers / open questions
+None. Not automated: a manual smoke test with a real Teams and a real Slack webhook. Review pending (`/review-spec`).
+
+### Review
+| Stage | Result | Key numbers |
+|---|---|---|
+| QA | Passed | 1712/1712 passed (integration 627), 0 proposed tests required, 4 Low |
+| Security | Passed | 0 Critical / 0 High / 0 Medium / 2 Low |
+| Senior code review | Approved | 0 Critical / 0 High / 0 Medium / 4 Low |
+
+Verdict: **Approved**. Open non-blocking items: QA F1 the OpenTelemetry `FilterHttpRequestMessage`/`SuppressTracing` guard has no test (removing it would pass CI); QA F3 Slack `*` and `_` in a title can break the bold markup (cannot ping anyone); QA F4 the layering test checks constructor parameters only; QA F5 redirects are tested at configuration level only (`AllowAutoRedirect = false`); SEC-1 the default Teams hosts (`*.logic.azure.com`, `*.api.powerplatform.com`) match any tenant and the port is not restricted (operators override `Notifications:Chat:AllowedHosts`; optionally require the default port); SEC-2 a bare URL in a title is auto-linked by Teams and Slack; code review L1 a Teams `TextBlock` may not show single line breaks and `EscapeMarkdown` escapes characters inside the incident link (confirm with the manual smoke test, then split the text per line); L2 the catch-all in `PostAsync` maps programming errors to a retryable failure with only the type name; L3 `ObservabilityExtensions` references the internal `ChatWebhookSender.SuppressTracing` (move the key to `Telemetry`); L4 `HostAllowList` accepts public-suffix wildcards such as `*.co.uk`. Not performed: a manual smoke test with a real Teams and a real Slack webhook (not automated), `dotnet format --verify-no-changes` by the reviewers (run by the implementer, clean), running the Worker host end to end with `Chat:Enabled=true`. The spec header still says Draft.
+
+## Previous implementation (12_04)
+
+| Field | Value |
+|---|---|
 | Spec | `docs/specs/12_04_worker-change-propagation.md` (BE-12, part 4 of 4) |
 | State | Done <!-- Planned - In progress - Blocked - Done --> |
 | Started | 2026-10-19 |
@@ -511,6 +551,10 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-21 - 13_01 - Reviewed - Approved - QA 1712/1712 (4 Low), security 0 Critical/High/Medium (2 Low), code review 0 Critical/High/Medium (4 Low).
+- 2026-10-21 - 13_01 - Done - Teams and Slack webhook senders, `teams`/`slack` Polly pipelines, host allow-list, logging fallback; 627 integration + 1085 unit tests green with Docker, format clean; review pending.
+- 2026-10-21 - 13_01 - Blocked - Code, docs and tests complete; build, format and 1085 unit tests green; integration run waited for Docker.
+- 2026-10-21 - 13_01 - In progress - Started; Teams and Slack webhook senders with per-channel Polly pipelines; no deferred item involved.
 - 2026-10-19 - 12_04 - Fixed - Review SEC-1/L2 (subscriber retries on any exception) and L1 (unsubscribe), resubscribe test, spec header Approved; build 0 warnings, format clean, unit tests and 627/627 integration tests green with Docker.
 - 2026-10-19 - 12_04 - Reviewed - Approved - QA 1641/1641 (7 Low), security 0 Critical/High/Medium (3 Low), code review 0 Critical/High/Medium (7 Low).
 - 2026-10-19 - 12_04 - Done - Worker-to-API change relay over Redis pub/sub (`RedisChangePublisher`, `RedisChangeSubscriber`, one relayer per message); 627 integration + 1014 unit tests green with Docker, format clean; review pending.

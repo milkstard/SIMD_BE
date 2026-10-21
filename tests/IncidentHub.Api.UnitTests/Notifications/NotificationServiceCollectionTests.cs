@@ -20,6 +20,12 @@ public sealed class NotificationServiceCollectionTests
         return services.BuildServiceProvider();
     }
 
+    private static INotificationSender EmailSender(IServiceProvider provider) =>
+        provider.GetServices<INotificationSender>().Single(s => s.Channel == NotificationChannel.Email);
+
+    private static INotificationSender ChatSender(IServiceProvider provider, NotificationChannel channel) =>
+        provider.GetServices<INotificationSender>().Single(s => s.Channel == channel);
+
     [Fact]
     public void Resolve_Disabled_UsesLoggingSenderWithoutAnySmtpSettings()
     {
@@ -27,7 +33,7 @@ public sealed class NotificationServiceCollectionTests
 
         provider.GetRequiredService<IStartupValidator>().Validate();
 
-        var sender = provider.GetRequiredService<INotificationSender>();
+        var sender = EmailSender(provider);
         sender.GetType().Name.Should().Be("LoggingEmailSender");
         sender.Channel.Should().Be(NotificationChannel.Email);
     }
@@ -36,7 +42,7 @@ public sealed class NotificationServiceCollectionTests
     public async Task SendAsync_Disabled_SendsNothingAndDoesNotThrow()
     {
         using var provider = Build(new() { ["Notifications:Email:Enabled"] = "false" });
-        var sender = provider.GetRequiredService<INotificationSender>();
+        var sender = EmailSender(provider);
 
         var act = () => sender.SendAsync(new Notification(Guid.NewGuid(), "a@example.com", null, "Subject", "t", "<p>h</p>"), CancellationToken.None);
 
@@ -71,7 +77,7 @@ public sealed class NotificationServiceCollectionTests
 
         provider.GetRequiredService<IStartupValidator>().Validate();
 
-        provider.GetRequiredService<INotificationSender>().GetType().Name.Should().Be("EmailSender");
+        EmailSender(provider).GetType().Name.Should().Be("EmailSender");
     }
 
     [Fact]
@@ -82,5 +88,45 @@ public sealed class NotificationServiceCollectionTests
         var act = () => provider.GetRequiredService<IStartupValidator>().Validate();
 
         act.Should().Throw<OptionsValidationException>().Which.Message.Should().Contain("Notifications:Resilience:MaxRetries");
+    }
+
+    [Fact]
+    public async Task AddNotificationSenders_ChatDisabled_RegistersLoggingSenders()
+    {
+        using var provider = Build(new());
+
+        provider.GetRequiredService<IStartupValidator>().Validate();
+
+        ChatSender(provider, NotificationChannel.Teams).GetType().Name.Should().Be("LoggingChatSender");
+        ChatSender(provider, NotificationChannel.Slack).GetType().Name.Should().Be("LoggingChatSender");
+        var act = () => ChatSender(provider, NotificationChannel.Slack).SendAsync(
+            new Notification(Guid.NewGuid(), "https://hooks.slack.com/services/T/B/X", null, "Subject", "t", string.Empty), CancellationToken.None);
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public void AddNotificationSenders_ChatEnabledAndValid_RegistersWebhookSenders()
+    {
+        using var provider = Build(new() { ["Notifications:Chat:Enabled"] = "true" });
+
+        provider.GetRequiredService<IStartupValidator>().Validate();
+
+        ChatSender(provider, NotificationChannel.Teams).GetType().Name.Should().Be("TeamsNotificationSender");
+        ChatSender(provider, NotificationChannel.Slack).GetType().Name.Should().Be("SlackNotificationSender");
+        provider.GetServices<INotificationSender>().Select(s => s.Channel).Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public void AddNotificationSenders_ChatEnabledInvalid_FailsOnStart()
+    {
+        using var provider = Build(new()
+        {
+            ["Notifications:Chat:Enabled"] = "true",
+            ["Notifications:Chat:AllowedHosts:0"] = "*.com",
+        });
+
+        var act = () => provider.GetRequiredService<IStartupValidator>().Validate();
+
+        act.Should().Throw<OptionsValidationException>().Which.Message.Should().Contain("Notifications:Chat:AllowedHosts");
     }
 }

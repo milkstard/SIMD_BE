@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using IncidentHub.Infrastructure.Notifications.Chat;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenTelemetry;
@@ -66,7 +67,9 @@ public static class ObservabilityExtensions
             .WithTracing(tracing =>
             {
                 tracing.AddSource(serviceName, InfrastructureTelemetry.SourceName)
-                    .AddHttpClientInstrumentation();
+                    // Chat webhook URLs are credentials and the span would record the full URL.
+                    .AddHttpClientInstrumentation(options => options.FilterHttpRequestMessage = request =>
+                        !(request.Options.TryGetValue(ChatWebhookSender.SuppressTracing, out var suppress) && suppress));
                 configureTracing?.Invoke(tracing);
             })
             .WithMetrics(metrics =>
