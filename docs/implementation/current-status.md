@@ -590,6 +590,7 @@ Approved after review round 3 (QA 637/637, security 0 findings, code review 2 Lo
 
 ## Log
 
+- 2026-10-21 - 13_02 - Fixed - Review SEC-2/QA Low-1 (router logs the exception type only, 2 tests), code review L1 (limitation documented in spec section 9), L2, L4, QA Low-2 (spec header Approved, criteria ticked); build 0 warnings, format clean, 1137 unit tests and the 31 dispatch integration tests green. Still open: SEC-1, L3, QA Low-3.
 - 2026-10-21 - 13_02 - Reviewed - Approved - QA 1777/1777 (3 Low), security 0 Critical/High/Medium (2 Low), code review 0 Critical/High/Medium (4 Low).
 - 2026-10-21 - 13_02 - Done - Channel routing by `User.NotificationPrefs` for the five existing triggers (`NotificationRouter`, `ChatDelivery`, `IsLive` fallback); 642 integration + 1135 unit tests green with Docker, format clean; review pending.
 - 2026-10-21 - 13_02 - In progress - Started; Teams/Slack routing by `User.NotificationPrefs` for the five existing triggers; pulls in two deferred items (prefs, SLA chat delivery).

@@ -1,6 +1,6 @@
 # Spec 13_02: Channel routing and user preferences
 
-> Status: **Draft** · Source: BE-13 in docs/BACKEND-SPECS.md · Part 2 of 2
+> Status: **Approved** · Source: BE-13 in docs/BACKEND-SPECS.md · Part 2 of 2
 
 ## 1. Purpose & scope
 
@@ -78,19 +78,19 @@ None. No API change, so `swagger.json` is unchanged (`OpenApiDocumentTests` stay
 
 ## 5. Acceptance criteria
 
-- [ ] A user whose `NotificationPrefs` is Teams receives the chat post and **no email** for the same event, for each of the four user-addressed triggers (assigned, resolved, SLA warning, SLA breach to the contact).
-- [ ] The same holds for Slack, using a Slack webhook URL on the owning team.
-- [ ] A user with Email, the default, or an unparsable value receives the email only; an unparsable value logs one `Warning` with the user id.
-- [ ] A Teams/Slack user whose owning team has no URL, an invalid URL, or a URL of the other kind receives the email instead, with a `Warning`.
-- [ ] A chat post that fails permanently (404/410/403) falls back to email for a user and is logged and swallowed for a team post; the message is marked processed, not parked.
-- [ ] A transient chat failure leaves the message unprocessed with `Attempts` incremented; a user-path retry succeeds later with no email sent in the meantime; the dispatcher keeps running and later messages are not blocked.
-- [ ] An incident-reported message mails the team address and, when the team has a usable URL, also posts to its channel; a team without a URL only mails.
-- [ ] A breach for an application without an escalation contact reaches the owning team by email and channel, as in 12_03.
-- [ ] The other outbox types (`IncidentUpdated`, other transitions, `CommentAdded`, `AttachmentAdded`) are still marked processed without any send, email or chat.
-- [ ] No request handler, controller or hub references `INotificationSender` or a chat client; only dispatcher-run handlers do (architecture test).
-- [ ] A redelivered message produces the same email `Message-Id` as before.
-- [ ] The webhook URL appears in no log, exception text or `OutboxMessages.Error`.
-- [ ] `dotnet build` (warnings as errors), `dotnet format`, full test suite green; `current-status.md` updated.
+- [x] A user whose `NotificationPrefs` is Teams receives the chat post and **no email** for the same event, for each of the four user-addressed triggers (assigned, resolved, SLA warning, SLA breach to the contact).
+- [x] The same holds for Slack, using a Slack webhook URL on the owning team.
+- [x] A user with Email, the default, or an unparsable value receives the email only; an unparsable value logs one `Warning` with the user id.
+- [x] A Teams/Slack user whose owning team has no URL, an invalid URL, or a URL of the other kind receives the email instead, with a `Warning`.
+- [x] A chat post that fails permanently (404/410/403) falls back to email for a user and is logged and swallowed for a team post; the message is marked processed, not parked.
+- [x] A transient chat failure leaves the message unprocessed with `Attempts` incremented; a user-path retry succeeds later with no email sent in the meantime; the dispatcher keeps running and later messages are not blocked.
+- [x] An incident-reported message mails the team address and, when the team has a usable URL, also posts to its channel; a team without a URL only mails.
+- [x] A breach for an application without an escalation contact reaches the owning team by email and channel, as in 12_03.
+- [x] The other outbox types (`IncidentUpdated`, other transitions, `CommentAdded`, `AttachmentAdded`) are still marked processed without any send, email or chat.
+- [x] No request handler, controller or hub references `INotificationSender` or a chat client; only dispatcher-run handlers do (architecture test).
+- [x] A redelivered message produces the same email `Message-Id` as before.
+- [x] The webhook URL appears in no log, exception text or `OutboxMessages.Error`.
+- [x] `dotnet build` (warnings as errors), `dotnet format`, full test suite green; `current-status.md` updated.
 
 ## 6. Test plan
 
@@ -139,3 +139,5 @@ Added by the implementation plan:
 - **Chat disabled.** `INotificationSender` gains `bool IsLive`; the logging senders (`LoggingChatSender`, `LoggingEmailSender`) report `false`. The router treats a chat channel without a live sender like an unusable URL: a user who prefers Teams/Slack gets the email (with a `Warning`), so switching chat off never silences an alert. A team with a webhook is only mailed (`Information`).
 - **Acceptance criterion added:** with `Notifications:Chat:Enabled=false`, a Teams/Slack-preferring user receives the email.
 - `ChatDelivery` (Application, next to `EmailDelivery`) renders once and picks the live sender; `NotificationRouter` takes `EmailDelivery`, `ChatDelivery` and `IIncidentEmailReader`. `EmailRecipient` gains an optional `NotificationPrefs`.
+- **Known limitation (code review L1).** Only a permanent chat failure falls back to email. A long Teams or Slack outage on the user path retries until `Outbox:Dispatcher:MaxAttempts` and parks the message, so that user gets no email; an operator finds it by its `Error`. Accepted: falling back on the last attempt would need the attempt count in the handlers.
+- **Logging (security SEC-2).** The router logs a failed chat leg by exception type only, never `exception.Message`.

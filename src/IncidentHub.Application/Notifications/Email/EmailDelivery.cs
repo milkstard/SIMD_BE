@@ -3,7 +3,7 @@ using IncidentHub.Application.Abstractions;
 namespace IncidentHub.Application.Notifications.Email;
 
 /// <summary>
-/// Renders an <see cref="EmailContent"/> and hands it to the email sender. Shared by the three handlers. The outbox message id is the
+/// Renders an <see cref="EmailContent"/> and hands it to the email sender. The email leg of <see cref="NotificationRouter"/>. The outbox message id is the
 /// notification's <see cref="Notification.MessageId"/>, so a redelivery carries the same <c>Message-Id</c>. Sender failures propagate:
 /// the dispatcher owns retry and parking.
 /// </summary>

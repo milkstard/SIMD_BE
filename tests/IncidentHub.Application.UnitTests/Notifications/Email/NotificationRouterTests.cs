@@ -140,6 +140,31 @@ public sealed class NotificationRouterTests
     }
 
     [Fact]
+    public async Task SendToUser_ChatFailureMessageHoldsUrl_UrlIsNotLogged()
+    {
+        GivenTeamUrl(EmailTestKit.TeamsUrl);
+        _kit.TeamsSender.SendAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Throws(new NonRetryableOutboxException($"bad destination {EmailTestKit.TeamsUrl}"));
+
+        await SendToUser(EmailTestKit.TeamsPrefs);
+
+        _kit.Sent().Should().ContainSingle();
+        _logger.Messages.Should().NotContain(m => m.Contains("secret") || m.Contains("/abc") || m.Contains("https://"));
+    }
+
+    [Fact]
+    public async Task SendToTeam_ChatFailureMessageHoldsUrl_UrlIsNotLogged()
+    {
+        GivenTeamUrl(EmailTestKit.TeamsUrl);
+        _kit.TeamsSender.SendAsync(Arg.Any<Notification>(), Arg.Any<CancellationToken>())
+            .Throws(new NonRetryableOutboxException($"bad destination {EmailTestKit.TeamsUrl}"));
+
+        await SendToTeam();
+
+        _logger.Messages.Should().NotContain(m => m.Contains("/abc") || m.Contains("https://"));
+    }
+
+    [Fact]
     public async Task SendToUser_ChatTransientFailure_PropagatesAndSendsNoEmail()
     {
         GivenTeamUrl(EmailTestKit.TeamsUrl);

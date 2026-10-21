@@ -8,7 +8,8 @@ namespace IncidentHub.Application.Notifications;
 /// Chooses the leg(s) of a notification. A user who prefers Teams or Slack gets the post on the owning team's channel <i>instead of</i>
 /// the email; when that channel cannot be used the email is sent so an alert is never lost. A team gets the email and, when it has a
 /// webhook, the channel post as well. A transient chat failure propagates so the dispatcher retries the whole message.
-/// <para>The webhook URL is a credential: it is never logged or put into an exception.</para>
+/// <para>The webhook URL is a credential: it is never logged or put into an exception. A failed chat leg is logged by exception type
+/// only, so a sender that one day puts the URL into its message cannot leak it here.</para>
 /// </summary>
 public sealed class NotificationRouter(
     EmailDelivery email,
@@ -62,11 +63,11 @@ public sealed class NotificationRouter(
         catch (NonRetryableOutboxException exception)
         {
             logger.LogWarning(
-                "{Channel} post for user {UserId} (team {TeamId}) failed permanently: {Reason}; using email",
+                "{Channel} post for user {UserId} (team {TeamId}) failed permanently ({FailureType}); using email",
                 channel,
                 userId,
                 owningTeamId,
-                exception.Message);
+                exception.GetType().Name);
             await email.SendAsync(outboxMessageId, user, content, cancellationToken);
         }
     }
@@ -100,10 +101,10 @@ public sealed class NotificationRouter(
         {
             // The mail went out; a revoked webhook must not park every message of this team.
             logger.LogWarning(
-                "{Channel} post for team {TeamId} failed permanently: {Reason}; the email was sent",
+                "{Channel} post for team {TeamId} failed permanently ({FailureType}); the email was sent",
                 channel,
                 teamId,
-                exception.Message);
+                exception.GetType().Name);
         }
     }
 }
